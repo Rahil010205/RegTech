@@ -1,0 +1,73 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REGTECH_DATABASE_URL: postgresql+psycopg2://regtech:regtech@postgres:5432/regtech
+      REGTECH_QDRANT_URL: http://qdrant:6333
+      REGTECH_CELERY_BROKER_URL: redis://redis:6379/0
+      REGTECH_CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: .
+    env_file:
+      - .env
+    environment:
+      REGTECH_DATABASE_URL: postgresql+psycopg2://regtech:regtech@postgres:5432/regtech
+      REGTECH_QDRANT_URL: http://qdrant:6333
+      REGTECH_CELERY_BROKER_URL: redis://redis:6379/0
+      REGTECH_CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - api
+      - redis
+      - postgres
+      - qdrant
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q ingestion,embedding,compliance,reports
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: regtech
+      POSTGRES_PASSWORD: regtech
+      POSTGRES_DB: regtech
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regtech -d regtech"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  postgres_data:
+  qdrant_data:
