@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.ingestion.clause_splitter import ClauseSplitter
 from app.ingestion.metadata_extractor import MetadataExtractor
-from app.ingestion.pdf_loader import PdfLoader
+from app.ingestion.pdf_loader import PDFLoader
 from app.ingestion.text_cleaner import TextCleaner
 from app.ingestion.validator import IngestionValidator
 
@@ -16,7 +16,7 @@ class IngestionService:
 
   def __init__(self, db: Session) -> None:
     self.db = db
-    self.pdf_loader = PdfLoader()
+    self.pdf_loader_cls = PDFLoader
     self.text_cleaner = TextCleaner()
     self.clause_splitter = ClauseSplitter()
     self.metadata_extractor = MetadataExtractor()
