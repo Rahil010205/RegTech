@@ -23,7 +23,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.raw_data_dir.mkdir(parents=True, exist_ok=True)
     settings.processed_data_dir.mkdir(parents=True, exist_ok=True)
     settings.reports_data_dir.mkdir(parents=True, exist_ok=True)
-    # TODO: ensure Qdrant collections, warm up embedding model
     yield
 
 

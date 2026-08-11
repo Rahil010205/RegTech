@@ -29,6 +29,18 @@ class MessageResponse(BaseModel):
   message: str
 
 
+class ServiceStatus(BaseModel):
+  connected: bool
+  error: str | None = None
+
+
+class HealthResponse(BaseModel):
+  """Response shape for GET /health."""
+  status: str  # "ok" | "degraded"
+  db: ServiceStatus
+  qdrant: ServiceStatus
+
+
 class TimestampSchema(BaseModel):
   model_config = ConfigDict(from_attributes=True)
 
