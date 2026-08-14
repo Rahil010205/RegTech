@@ -12,6 +12,7 @@ from app.api.middleware.request_id import RequestIDMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logger import setup_logging
+from app.vectordb.collections import ensure_collections
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings.raw_data_dir.mkdir(parents=True, exist_ok=True)
     settings.processed_data_dir.mkdir(parents=True, exist_ok=True)
     settings.reports_data_dir.mkdir(parents=True, exist_ok=True)
+    ensure_collections()
     yield
 
 
