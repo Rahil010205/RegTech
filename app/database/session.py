@@ -2,6 +2,7 @@
 
 from collections.abc import Generator
 
+import app.models  # noqa: F401 — register all ORM mappers
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database.engine import create_db_engine

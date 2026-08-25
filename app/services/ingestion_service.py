@@ -4,24 +4,30 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.ingestion.clause_splitter import ClauseSplitter
-from app.ingestion.metadata_extractor import MetadataExtractor
-from app.ingestion.pdf_loader import PDFLoader
-from app.ingestion.text_cleaner import TextCleaner
-from app.ingestion.validator import IngestionValidator
+from app.ingestion.ingestion_pipeline import IngestionOptions, IngestionPipeline, IngestionResult
 
 
 class IngestionService:
-  """Orchestrates the PDF → clauses pipeline."""
+    """Application service wrapper around the regulatory ingestion pipeline."""
 
-  def __init__(self, db: Session) -> None:
-    self.db = db
-    self.pdf_loader_cls = PDFLoader
-    self.text_cleaner = TextCleaner()
-    self.clause_splitter = ClauseSplitter()
-    self.metadata_extractor = MetadataExtractor()
-    self.validator = IngestionValidator()
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.pipeline = IngestionPipeline(db)
 
-  def ingest_file(self, file_path: Path) -> dict:
-    """Run full ingestion pipeline. Implementation pending."""
-    raise NotImplementedError
+    def ingest_file(
+        self,
+        file_path: Path,
+        *,
+        regulator_code: str = "RBI",
+        version: str = "1.0",
+        title: str | None = None,
+        document_type: str = "regulation",
+    ) -> IngestionResult:
+        """Run the regulatory ingestion pipeline for a local PDF."""
+        options = IngestionOptions(
+            regulator_code=regulator_code,
+            version=version,
+            title=title,
+            document_type=document_type,
+        )
+        return self.pipeline.ingest_document(file_path, options)

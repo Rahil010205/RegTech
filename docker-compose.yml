@@ -40,7 +40,7 @@ services:
     command: celery -A app.workers.celery_app worker --loglevel=info -Q ingestion,embedding,compliance,reports
 
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     environment:
       POSTGRES_USER: regtech
       POSTGRES_PASSWORD: regtech

@@ -32,6 +32,24 @@ class ClauseParsingError(DomainError):
         super().__init__(message, "CLAUSE_PARSING_FAILED")
 
 
+class IngestionError(DomainError):
+    """Regulatory document ingestion failed."""
+
+    def __init__(self, message: str, error_code: str = "INGESTION_FAILED") -> None:
+        super().__init__(message, error_code)
+
+
+class EmptyDocumentError(IngestionError):
+    def __init__(self, message: str = "Document contains no extractable text") -> None:
+        super().__init__(message, "EMPTY_DOCUMENT")
+
+
+class DuplicateDocumentError(IngestionError):
+    def __init__(self, message: str, document_id: str | None = None) -> None:
+        super().__init__(message, "DUPLICATE_DOCUMENT")
+        self.document_id = document_id
+
+
 class ComplianceEvaluationError(DomainError):
     """Compliance evaluation could not complete."""
 

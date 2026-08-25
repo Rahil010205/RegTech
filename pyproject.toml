@@ -21,3 +21,8 @@ packages = ["app"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+markers = [
+    "integration: integration tests requiring PostgreSQL",
+    "evaluation: retrieval evaluation dataset tests",
+    "slow: tests that load the real embedding model",
+]

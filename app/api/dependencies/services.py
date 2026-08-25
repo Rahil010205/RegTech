@@ -10,6 +10,7 @@ from app.services.compliance_service import ComplianceService
 from app.services.document_service import DocumentService
 from app.services.regulation_service import RegulationService
 from app.services.report_service import ReportService
+from app.services.search_service import SearchService
 
 
 def get_regulation_service(db: Annotated[Session, Depends(get_db)]) -> RegulationService:
@@ -26,3 +27,7 @@ def get_compliance_service(db: Annotated[Session, Depends(get_db)]) -> Complianc
 
 def get_report_service(db: Annotated[Session, Depends(get_db)]) -> ReportService:
   return ReportService(db)
+
+
+def get_search_service(db: Annotated[Session, Depends(get_db)]) -> SearchService:
+  return SearchService(db)

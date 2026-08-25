@@ -35,10 +35,13 @@ class Settings(BaseSettings):
     qdrant_timeout: int = 30
 
     # Embeddings
+    embedding_provider: str = Field(default="local", description="local | openai")
     embedding_model_name: str = "BAAI/bge-large-en-v1.5"
     embedding_device: str = "cpu"
     embedding_batch_size: int = 32
     embedding_dimension: int = 1024
+    openai_api_key: str | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
 
     # Celery
     celery_broker_url: str = "redis://localhost:6379/0"
@@ -48,7 +51,8 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
 
     # Retrieval
-    retrieval_top_k: int = 10
+    retrieval_top_k: int = 5
+    retrieval_top_k_max: int = 50
     rerank_top_k: int = 5
     similarity_threshold: float = 0.65
 
