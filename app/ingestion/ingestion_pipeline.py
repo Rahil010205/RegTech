@@ -168,11 +168,16 @@ class IngestionPipeline:
                 version_row.status = JobStatus.PROCESSING.value
                 self.session.flush()
             else:
-                regulation = self.regulation_repo.create_regulation(
+                regulation = self.regulation_repo.get_regulation_by_title_and_regulator(
                     regulator_code=regulator_code,
                     title=title[:500],
-                    document_type=document_type[:50],
                 )
+                if regulation is None:
+                    regulation = self.regulation_repo.create_regulation(
+                        regulator_code=regulator_code,
+                        title=title[:500],
+                        document_type=document_type[:50],
+                    )
                 version_row = self.regulation_repo.create_version(
                     regulation_id=regulation.id,
                     version=opts.version,
@@ -209,6 +214,32 @@ class IngestionPipeline:
                     )
                 )
 
+            # Diagnostic output before bulk_create
+            unique_ids = set()
+            duplicate_ids = set()
+            for c in clause_models:
+                if c.clause_number in unique_ids:
+                    duplicate_ids.add(c.clause_number)
+                else:
+                    unique_ids.add(c.clause_number)
+
+            print(f"Total extracted clauses: {len(clause_models)}")
+            print(f"Unique clause identifiers: {len(unique_ids)}")
+            print(f"Duplicate identifiers: {len(duplicate_ids)}")
+
+            for dup_id in sorted(duplicate_ids):
+                dup_group = [c for c in clause_models if c.clause_number == dup_id]
+                safe_texts = [g.text.encode('ascii', errors='replace').decode('ascii') for g in dup_group]
+                print(
+                    f"Duplicate:\n"
+                    f"version_id={document_id}\n"
+                    f"clause_number={dup_id}\n"
+                    f"pages={[g.page_number for g in dup_group]}\n"
+                    f"texts={safe_texts}"
+                )
+
+            clause_models = self._deduplicate_and_merge_clauses(clause_models)
+
             self.clause_repo.bulk_create(clause_models)
             self.regulation_repo.update_status(version_row, JobStatus.COMPLETED.value)
             self.session.commit()
@@ -241,6 +272,60 @@ class IngestionPipeline:
                     self.session.rollback()
             logger.exception("Ingestion failed for {}", path)
             raise DatabaseError(f"Ingestion failed: {exc}") from exc
+
+    def _deduplicate_and_merge_clauses(self, clauses: list[Clause]) -> list[Clause]:
+        grouped: dict[str, list[Clause]] = {}
+        for c in clauses:
+            grouped.setdefault(c.clause_number, []).append(c)
+
+        merged_clauses: list[Clause] = []
+        for clause_number, group in grouped.items():
+            if len(group) == 1:
+                merged_clauses.append(group[0])
+                continue
+
+            logger.warning(
+                "Duplicate clause_number detected: {} occurrences for clause_number='{}'. "
+                "Pages: {}. Merging them.",
+                len(group),
+                clause_number,
+                [g.page_number for g in group],
+            )
+            
+            first = group[0]
+            combined_texts = []
+            for g in group:
+                txt = g.text.strip()
+                if txt:
+                    combined_texts.append(txt)
+            combined_text = " ".join(combined_texts)
+            
+            first.text = combined_text
+            first.page_number = min(filter(lambda p: p is not None, (g.page_number for g in group)), default=first.page_number)
+            first.page_end = max(filter(lambda p: p is not None, (g.page_end for g in group)), default=first.page_end)
+            
+            merged_meta = {}
+            for g in group:
+                if g.metadata_:
+                    merged_meta.update(g.metadata_)
+            first.metadata_ = merged_meta
+            
+            logger.info("Re-embedding combined text for clause_number='{}'", clause_number)
+            try:
+                embeddings = self.embedding_service.embed_texts([combined_text])
+                if embeddings:
+                    first.embedding = embeddings[0]
+            except Exception as e:
+                logger.error("Failed to generate embedding for merged clause_number='{}': {}", clause_number, e)
+                valid_embs = [g.embedding for g in group if g.embedding is not None]
+                if valid_embs:
+                    dim = len(valid_embs[0])
+                    avg_emb = [sum(emb[i] for emb in valid_embs) / len(valid_embs) for i in range(dim)]
+                    first.embedding = avg_emb
+
+            merged_clauses.append(first)
+            
+        return merged_clauses
 
     def _validate_file(self, path: Path) -> None:
         if not path.exists():

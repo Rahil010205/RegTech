@@ -30,6 +30,15 @@ class RegulationIngestionRepository:
             self.session.flush()
         return regulator
 
+    def get_regulation_by_title_and_regulator(
+        self, regulator_code: str, title: str
+    ) -> Regulation | None:
+        stmt = select(Regulation).where(
+            Regulation.regulator_code == regulator_code,
+            Regulation.title == title,
+        )
+        return self.session.scalar(stmt)
+
     def create_regulation(
         self,
         *,

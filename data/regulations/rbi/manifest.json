@@ -1,0 +1,33 @@
+[
+    {
+        "filename": "KYC - NBFCs.pdf",
+        "title": "KYC - NBFCs",
+        "regulator": "RBI",
+        "category": "KYC",
+        "applicability": ["NBFC"],
+        "source_type": "regulatory_document"
+    },
+    {
+        "filename": "KYC - payments bank.pdf",
+        "title": "KYC - Payments Banks",
+        "regulator": "RBI",
+        "category": "KYC",
+        "applicability": ["Payments Bank"],
+        "source_type": "regulatory_document"
+    },
+    {
+        "filename": "KYC - SFBs.pdf",
+        "title": "KYC - SFB",
+        "regulator": "RBI",
+        "category": "KYC",
+        "applicability": ["Small Finance Bank"],
+        "source_type": "regulatory_document"
+    },
+    {
+        "filename": "KYC.pdf",
+        "title": "KYC",
+        "regulator": "RBI",
+        "category": "KYC",
+        "source_type": "regulatory_document"
+    }
+]

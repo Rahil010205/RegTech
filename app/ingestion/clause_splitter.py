@@ -87,6 +87,7 @@ class ClauseSplitter:
     _NUMERIC_CLAUSE = re.compile(
         r"^[ \t]*(?P<number>\d+(?:\.\d+){0,3})[.\s][ \t]*(?P<rest>.+)$"
     )
+    _NUM_SUB_CLAUSE = re.compile(r"^[ \t]*\((?P<label>\d+)\)[ \t]+(?P<rest>.+)$")
     _ALPHA_CLAUSE = re.compile(r"^[ \t]*\((?P<label>[a-z])\)[ \t]+(?P<rest>.+)$", re.IGNORECASE)
     _ROMAN_CLAUSE = re.compile(
         r"^[ \t]*\((?P<label>[ivxlc]+)\)[ \t]+(?P<rest>.+)$",
@@ -96,8 +97,12 @@ class ClauseSplitter:
         r"^[ \t]*(?:Section|Article|Rule|Chapter)\s+"
         r"(?P<number>[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)"
         r"[ \t]*[:\-—]?\s*(?P<rest>.*)$",
-        re.IGNORECASE,
     )
+
+    _STANDALONE_NUMERIC = re.compile(r"^\d+(?:\.\d+){0,3}\.?$")
+    _STANDALONE_PAREN_NUM = re.compile(r"^\(\d+\)$")
+    _STANDALONE_PAREN_ALPHA = re.compile(r"^\([a-z]\)$", re.IGNORECASE)
+    _STANDALONE_PAREN_ROMAN = re.compile(r"^\([ivxlc]+\)$", re.IGNORECASE)
 
     _MIN_CLAUSE_LENGTH = 10
 
@@ -122,14 +127,48 @@ class ClauseSplitter:
                 annotated.append(_AnnotatedLine(page_number=page_number, text=line))
         return self._split_annotated_lines(annotated)
 
+    def _preprocess_lines(self, lines: list[_AnnotatedLine]) -> list[_AnnotatedLine]:
+        preprocessed: list[_AnnotatedLine] = []
+        i = 0
+        n = len(lines)
+        while i < n:
+            curr_line = lines[i]
+            stripped = curr_line.text.strip()
+            
+            is_standalone = (
+                self._STANDALONE_NUMERIC.match(stripped) or
+                self._STANDALONE_PAREN_NUM.match(stripped) or
+                self._STANDALONE_PAREN_ALPHA.match(stripped) or
+                self._STANDALONE_PAREN_ROMAN.match(stripped)
+            )
+            
+            if is_standalone and i + 1 < n:
+                j = i + 1
+                while j < n and not lines[j].text.strip():
+                    j += 1
+                if j < n:
+                    next_line = lines[j]
+                    merged_text = f"{stripped} {next_line.text.strip()}"
+                    preprocessed.append(_AnnotatedLine(page_number=curr_line.page_number, text=merged_text))
+                    i = j + 1
+                    continue
+            
+            preprocessed.append(curr_line)
+            i += 1
+        return preprocessed
+
     def _split_annotated_lines(self, lines: list[_AnnotatedLine]) -> list[ClauseRecord]:
+        merged_lines = self._preprocess_lines(lines)
+        
         candidates: list[_ClauseCandidate] = []
         current: _ClauseCandidate | None = None
         current_section = ""
         preamble_lines: list[_AnnotatedLine] = []
         current_numeric_parent = ""
+        current_sub_parent = ""
+        current_alpha_parent = ""
 
-        for annotated in lines:
+        for annotated in merged_lines:
             raw = annotated.text
             stripped = raw.strip()
             if not stripped:
@@ -144,13 +183,14 @@ class ClauseSplitter:
                 if current is not None:
                     candidates.append(current)
                     current = None
+                keyword = structural.group(0).split()[0]
                 section_number = structural.group("number")
                 section_title = structural.group("rest").strip()
                 current_section = (
-                    f"{structural.group(0).split()[0]} {section_number}"
+                    f"{keyword} {section_number}"
                     + (f" — {section_title}" if section_title else "")
                 ).strip()
-                if section_title and len(section_title) >= self._MIN_CLAUSE_LENGTH:
+                if keyword.lower() != "chapter" and section_title and len(section_title) >= self._MIN_CLAUSE_LENGTH:
                     current = _ClauseCandidate(
                         number=section_number,
                         level=1,
@@ -161,6 +201,7 @@ class ClauseSplitter:
                 continue
 
             numeric = self._NUMERIC_CLAUSE.match(stripped)
+            numeric_sub = self._NUM_SUB_CLAUSE.match(stripped)
             alpha = self._ALPHA_CLAUSE.match(stripped)
             roman = self._ROMAN_CLAUSE.match(stripped)
 
@@ -174,9 +215,28 @@ class ClauseSplitter:
                 number = numeric.group("number")
                 rest = numeric.group("rest").strip()
                 current_numeric_parent = number
+                current_sub_parent = number
+                current_alpha_parent = number
                 current = _ClauseCandidate(
                     number=number,
                     level=number.count(".") + 1,
+                    title=rest,
+                    section=current_section,
+                    lines=[_AnnotatedLine(annotated.page_number, rest)] if rest else [],
+                )
+                continue
+
+            if numeric_sub:
+                if current is not None:
+                    candidates.append(current)
+                label = numeric_sub.group("label")
+                rest = numeric_sub.group("rest").strip()
+                sub_number = f"{current_numeric_parent}({label})" if current_numeric_parent else f"({label})"
+                current_sub_parent = sub_number
+                current_alpha_parent = sub_number
+                current = _ClauseCandidate(
+                    number=sub_number,
+                    level=(current_numeric_parent.count(".") + 2 if current_numeric_parent else 2),
                     title=rest,
                     section=current_section,
                     lines=[_AnnotatedLine(annotated.page_number, rest)] if rest else [],
@@ -188,8 +248,10 @@ class ClauseSplitter:
                     candidates.append(current)
                 label = alpha.group("label").lower()
                 rest = alpha.group("rest").strip()
+                alpha_number = f"{current_sub_parent}({label})" if current_sub_parent else f"({label})"
+                current_alpha_parent = alpha_number
                 current = _ClauseCandidate(
-                    number=f"({label})",
+                    number=alpha_number,
                     level=(current_numeric_parent.count(".") + 2 if current_numeric_parent else 2),
                     title=rest,
                     section=current_section,
@@ -202,8 +264,9 @@ class ClauseSplitter:
                     candidates.append(current)
                 label = roman.group("label").lower()
                 rest = roman.group("rest").strip()
+                roman_number = f"{current_alpha_parent}({label})" if current_alpha_parent else f"({label})"
                 current = _ClauseCandidate(
-                    number=f"({label})",
+                    number=roman_number,
                     level=(current_numeric_parent.count(".") + 3 if current_numeric_parent else 3),
                     title=rest,
                     section=current_section,

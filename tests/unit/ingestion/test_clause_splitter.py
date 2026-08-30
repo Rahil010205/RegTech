@@ -52,8 +52,8 @@ class TestClauseSplitter:
         records = self.splitter.split(text)
         labels = [record["clause_number"] for record in records]
         assert "2" in labels
-        assert "(a)" in labels
-        assert "(b)" in labels
+        assert "2(a)" in labels
+        assert "2(b)" in labels
 
     def test_split_pages_preserves_page_numbers(self) -> None:
         pages = [
@@ -72,3 +72,21 @@ class TestClauseSplitter:
         records = self.splitter.split(text)
         assert len(records) == 1
         assert len(records[0]["text"]) >= 10
+
+    def test_merges_standalone_numbering_lines(self) -> None:
+        text = """
+        Chapter III — Customer Acceptance Policy
+        16.
+        The NBFC shall frame a Customer Acceptance Policy.
+        17.
+        Without prejudice to the generality...
+        (1)
+        not open any account in an anonymous name.
+        """
+        records = self.splitter.split(text)
+        numbers = [record["clause_number"] for record in records]
+        assert "16" in numbers
+        assert "17" in numbers
+        assert "17(1)" in numbers
+        c16 = next(r for r in records if r["clause_number"] == "16")
+        assert c16["text"] == "The NBFC shall frame a Customer Acceptance Policy."

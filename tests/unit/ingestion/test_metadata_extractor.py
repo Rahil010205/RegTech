@@ -52,3 +52,22 @@ class TestMetadataExtractor:
         assert enriched["clause_number"] == "4.1"
         assert enriched["page_number"] == 3
         assert enriched["section"] == "Section 4 — Data Retention"
+        assert enriched["chapter"] == "Section 4 — Data Retention"
+        assert enriched["section_number"] == "4.1"
+        assert enriched["sub_clause"] is None
+        assert enriched["source_type"] == "regulatory_document"
+
+        # Test subclause f"parent(subclause)" case
+        subclause: ClauseRecord = {
+            "clause_number": "(a)",
+            "level": 3,
+            "title": "Subclause A",
+            "text": "Subclause text",
+            "parent_clause": "4.1",
+            "section": "Section 4 — Data Retention",
+            "page_number": 3,
+            "page_end": 3,
+        }
+        enriched_sub = self.extractor.enrich_clause(subclause, doc_meta, document_id="abc-123")
+        assert enriched_sub["section_number"] == "4.1"
+        assert enriched_sub["sub_clause"] == "4.1(a)"

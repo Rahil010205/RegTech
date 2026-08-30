@@ -87,24 +87,43 @@ class MetadataExtractor:
         document_id: str | None = None,
     ) -> dict[str, Any]:
         """Attach document metadata to an individual clause record."""
+        clause_num = clause["clause_number"]
+        parent = clause.get("parent_clause") or ""
+        
+        section_number = None
+        sub_clause = None
+        
+        if re.match(r"^\d+(?:\.\d+)*$", clause_num):
+            section_number = clause_num
+        elif re.match(r"^\([a-zA-Z0-9]+\)$", clause_num):
+            if parent and re.match(r"^\d+(?:\.\d+)*$", parent):
+                section_number = parent
+                sub_clause = f"{parent}{clause_num}"
+            else:
+                sub_clause = clause_num
+
         return {
             "document_id": document_id,
             "document_name": document_metadata.get("document_name"),
             "document_type": document_metadata.get("document_type"),
-            "regulator": document_metadata.get("regulator"),
+            "regulator": document_metadata.get("regulator") or "RBI",
             "jurisdiction": document_metadata.get("jurisdiction"),
             "effective_date": document_metadata.get("effective_date"),
             "publication_date": document_metadata.get("publication_date"),
             "version": document_metadata.get("version"),
             "section": clause.get("section") or document_metadata.get("section"),
             "subsection": clause.get("parent_clause") or None,
-            "clause_number": clause["clause_number"],
+            "clause_number": clause_num,
             "page_number": clause.get("page_number"),
             "page_end": clause.get("page_end"),
             "source": document_metadata.get("source"),
             "title": clause.get("title") or None,
             "level": clause.get("level"),
             "parent_clause": clause.get("parent_clause") or None,
+            "chapter": clause.get("section") or document_metadata.get("section") or None,
+            "section_number": section_number,
+            "sub_clause": sub_clause,
+            "source_type": "regulatory_document",
         }
 
     def parse_effective_date(self, value: str | None) -> date | None:
