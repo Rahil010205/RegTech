@@ -33,6 +33,27 @@ class IngestionStatus(StrEnum):
     FAILED = "failed"
 
 
+class OrganizationDocumentStatus(StrEnum):
+    """Organization policy document processing states."""
+
+    UPLOADED = "uploaded"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
+    FAILED = "failed"
+
+
+class OrganizationDocumentType(StrEnum):
+    """Common organization policy document classifications."""
+
+    KYC_POLICY = "KYC_POLICY"
+    AML_POLICY = "AML_POLICY"
+    COMPLIANCE_MANUAL = "COMPLIANCE_MANUAL"
+    SOP = "SOP"
+    RISK_POLICY = "RISK_POLICY"
+    PROCEDURE = "PROCEDURE"
+    OTHER = "OTHER"
+
+
 class ComplianceStatus(StrEnum):
     """Per-clause compliance outcome."""
 

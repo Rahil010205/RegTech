@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.dependencies.db import get_db
 from app.services.compliance_service import ComplianceService
 from app.services.document_service import DocumentService
+from app.services.organization_policy_service import OrganizationPolicyService
 from app.services.regulation_service import RegulationService
 from app.services.report_service import ReportService
+from app.services.regulatory_policy_matching import RegulatoryPolicyMatchingService
 from app.services.search_service import SearchService
 
 
@@ -31,3 +33,15 @@ def get_report_service(db: Annotated[Session, Depends(get_db)]) -> ReportService
 
 def get_search_service(db: Annotated[Session, Depends(get_db)]) -> SearchService:
   return SearchService(db)
+
+
+def get_organization_policy_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> OrganizationPolicyService:
+    return OrganizationPolicyService(db)
+
+
+def get_regulatory_policy_matching_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> RegulatoryPolicyMatchingService:
+    return RegulatoryPolicyMatchingService(db)

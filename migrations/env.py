@@ -15,6 +15,8 @@ from app.models import (  # noqa: F401
     compliance_run,
     document,
     organization,
+    organization_document,
+    organization_policy_chunk,
     regulation,
     user,
 )

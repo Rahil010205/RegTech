@@ -1,21 +1,124 @@
-"""Organization management endpoints."""
+"""Organization and organization-policy document endpoints."""
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi.responses import JSONResponse
 
-from app.api.schemas.common import MessageResponse
+from app.api.dependencies.services import (
+    get_organization_policy_service,
+    get_regulatory_policy_matching_service,
+)
+from app.api.schemas.matching import (
+    RegulatoryPolicyMatchRequest,
+    RegulatoryPolicyMatchResponse,
+)
+from app.api.schemas.organization_document import (
+    OrganizationCreateRequest,
+    OrganizationDocumentIngestResponse,
+    OrganizationPolicySearchRequest,
+    OrganizationPolicySearchResponse,
+    OrganizationResponse,
+)
+from app.core.constants import OrganizationDocumentStatus
+from app.services.organization_policy_service import OrganizationPolicyService
+from app.services.regulatory_policy_matching import RegulatoryPolicyMatchingService
 
 router = APIRouter()
 
 
-@router.post("", response_model=MessageResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
-async def create_organization() -> MessageResponse:
-  """Create a new organization tenant. Not yet implemented."""
-  return MessageResponse(message="Not yet implemented")
+@router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
+def create_organization(
+    payload: OrganizationCreateRequest,
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+) -> OrganizationResponse:
+    """Create a new organization tenant."""
+    return service.create_organization(payload)
 
 
-@router.get("/{org_id}", response_model=MessageResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
-async def get_organization(org_id: UUID) -> MessageResponse:
-  """Get organization by ID. Not yet implemented."""
-  return MessageResponse(message=f"Not yet implemented: {org_id}")
+@router.get("/{organization_id}", response_model=OrganizationResponse)
+def get_organization(
+    organization_id: UUID,
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+) -> OrganizationResponse:
+    """Get organization by ID."""
+    return service.get_organization(organization_id)
+
+
+@router.post(
+    "/{organization_id}/documents",
+    response_model=OrganizationDocumentIngestResponse,
+    summary="Upload and ingest an organization policy PDF",
+)
+async def upload_organization_document(
+    organization_id: UUID,
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+    file: UploadFile = File(..., description="Organization policy PDF"),
+    document_type: str | None = Form(default=None),
+    version: str | None = Form(default=None),
+) -> OrganizationDocumentIngestResponse | JSONResponse:
+    """Ingest an organization policy PDF into pgvector-backed policy chunks."""
+    content = await file.read()
+    result = service.upload_document(
+        organization_id=organization_id,
+        filename=file.filename or "upload.pdf",
+        content=content,
+        document_type=document_type,
+        version=version,
+    )
+    if result.status == OrganizationDocumentStatus.FAILED.value:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=result.model_dump(mode="json"),
+        )
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content=result.model_dump(mode="json"),
+    )
+
+
+@router.post(
+    "/{organization_id}/documents/search",
+    response_model=OrganizationPolicySearchResponse,
+    summary="Semantic search over organization policy chunks",
+)
+def search_organization_policies(
+    organization_id: UUID,
+    request: OrganizationPolicySearchRequest,
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+) -> OrganizationPolicySearchResponse:
+    """Search only the specified organization's ingested policy chunks."""
+    return service.search(
+        organization_id=organization_id,
+        query=request.query,
+        top_k=request.top_k,
+        min_similarity=request.min_similarity,
+    )
+
+
+@router.post(
+    "/{organization_id}/compliance/match",
+    response_model=RegulatoryPolicyMatchResponse,
+    summary="Match a regulatory clause to organization policy chunks",
+    description=(
+        "Reuse the stored regulatory clause embedding and retrieve the most "
+        "semantically similar policy chunks for the specified organization. "
+        "This endpoint returns evidence only; it does not decide compliance."
+    ),
+)
+def match_regulatory_clause_to_policy(
+    organization_id: UUID,
+    request: RegulatoryPolicyMatchRequest,
+    service: Annotated[
+        RegulatoryPolicyMatchingService,
+        Depends(get_regulatory_policy_matching_service),
+    ],
+) -> RegulatoryPolicyMatchResponse:
+    """Find organization-policy evidence for one regulatory clause."""
+    return service.match_regulatory_clause_to_policy(
+        organization_id=organization_id,
+        regulatory_clause_id=request.regulatory_clause_id,
+        top_k=request.top_k,
+        similarity_threshold=request.similarity_threshold,
+    )

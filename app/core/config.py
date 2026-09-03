@@ -49,12 +49,20 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = Path("./data")
+    max_upload_bytes: int = Field(
+        default=25 * 1024 * 1024,
+        description="Maximum organization policy upload size in bytes",
+    )
 
     # Retrieval
     retrieval_top_k: int = 5
     retrieval_top_k_max: int = 50
     rerank_top_k: int = 5
     similarity_threshold: float = 0.65
+    matching_similarity_threshold: float = Field(
+        default=0.60,
+        description="Default cosine similarity threshold for regulatory-to-policy matching",
+    )
 
     # Compliance
     mandatory_clause_threshold: float = 0.75

@@ -7,11 +7,17 @@ from app.ingestion.ingestion_pipeline import (
     IngestionResult,
     ingest_document,
 )
+from app.ingestion.organization_policy_pipeline import (
+    OrganizationPolicyIngestResult,
+    OrganizationPolicyPipeline,
+)
 
 __all__ = [
     "EmbeddingService",
     "IngestionOptions",
     "IngestionPipeline",
     "IngestionResult",
+    "OrganizationPolicyIngestResult",
+    "OrganizationPolicyPipeline",
     "ingest_document",
 ]
