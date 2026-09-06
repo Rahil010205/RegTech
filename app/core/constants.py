@@ -72,6 +72,33 @@ class RiskLevel(StrEnum):
     CRITICAL = "critical"
 
 
+class RiskScoreLevel(StrEnum):
+    """Deterministic risk levels for Step 3 compliance scoring."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class GapSeverity(StrEnum):
+    """Gap severity classifications."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
+class RegulatoryCriticality(StrEnum):
+    """Regulatory requirement criticality classifications."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
 class JobStatus(StrEnum):
     """Generic async job status."""
 

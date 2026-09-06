@@ -7,8 +7,14 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies.services import (
+    get_compliance_analysis_service,
+    get_compliance_risk_scoring_service,
     get_organization_policy_service,
     get_regulatory_policy_matching_service,
+)
+from app.api.schemas.compliance_analysis import (
+    ComplianceAnalysisRequest,
+    ComplianceAnalysisResponse,
 )
 from app.api.schemas.matching import (
     RegulatoryPolicyMatchRequest,
@@ -21,7 +27,13 @@ from app.api.schemas.organization_document import (
     OrganizationPolicySearchResponse,
     OrganizationResponse,
 )
+from app.api.schemas.risk_scoring import (
+    RiskScoringRequest,
+    RiskScoringResponse,
+)
 from app.core.constants import OrganizationDocumentStatus
+from app.services.compliance_analysis import ComplianceAnalysisService
+from app.services.compliance_risk_scoring import ComplianceRiskScoringService
 from app.services.organization_policy_service import OrganizationPolicyService
 from app.services.regulatory_policy_matching import RegulatoryPolicyMatchingService
 
@@ -122,3 +134,56 @@ def match_regulatory_clause_to_policy(
         top_k=request.top_k,
         similarity_threshold=request.similarity_threshold,
     )
+
+
+@router.post(
+    "/{organization_id}/compliance/analyze",
+    response_model=ComplianceAnalysisResponse,
+    summary="Analyze regulatory compliance of organization policies via LLM",
+    description=(
+        "Retrieve relevant organization policy evidence via Step 2A pgvector semantic "
+        "matching and analyze compliance status using an LLM."
+    ),
+)
+def analyze_compliance(
+    organization_id: UUID,
+    request: ComplianceAnalysisRequest,
+    service: Annotated[
+        ComplianceAnalysisService,
+        Depends(get_compliance_analysis_service),
+    ],
+) -> ComplianceAnalysisResponse:
+    """Evaluate organization policy compliance for a single regulatory clause using LLM analysis."""
+    return service.analyze(
+        organization_id=organization_id,
+        regulatory_clause_id=request.regulatory_clause_id,
+        top_k=request.top_k,
+        similarity_threshold=request.similarity_threshold,
+    )
+
+
+@router.post(
+    "/{organization_id}/compliance/risk",
+    response_model=RiskScoringResponse,
+    summary="Assess regulatory compliance risk score and severity",
+    description=(
+        "Evaluate regulatory compliance of organization policies via Step 2A/2B and "
+        "compute a deterministic, explainable risk score (0–100) and severity level."
+    ),
+)
+def evaluate_compliance_risk(
+    organization_id: UUID,
+    request: RiskScoringRequest,
+    service: Annotated[
+        ComplianceRiskScoringService,
+        Depends(get_compliance_risk_scoring_service),
+    ],
+) -> RiskScoringResponse:
+    """Compute deterministic compliance risk score and factor breakdown for an organization."""
+    return service.evaluate_risk(
+        organization_id=organization_id,
+        regulatory_clause_id=request.regulatory_clause_id,
+        top_k=request.top_k,
+        similarity_threshold=request.similarity_threshold,
+    )
+

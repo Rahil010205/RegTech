@@ -79,6 +79,28 @@ class EmbeddingModelError(InfrastructureError):
         super().__init__(message, "EMBEDDING_MODEL_ERROR")
 
 
+class LLMError(InfrastructureError):
+    """Base exception for LLM provider errors."""
+
+    def __init__(self, message: str, error_code: str = "LLM_ERROR") -> None:
+        super().__init__(message, error_code)
+
+
+class LLMTimeoutError(LLMError):
+    def __init__(self, message: str = "LLM request timed out") -> None:
+        super().__init__(message, "LLM_TIMEOUT")
+
+
+class LLMServiceError(LLMError):
+    def __init__(self, message: str = "Compliance analysis service is temporarily unavailable.") -> None:
+        super().__init__(message, "LLM_SERVICE_UNAVAILABLE")
+
+
+class LLMResponseValidationError(ComplianceEvaluationError):
+    def __init__(self, message: str = "LLM response failed validation") -> None:
+        super().__init__(message)
+
+
 # --- Application errors ---
 
 

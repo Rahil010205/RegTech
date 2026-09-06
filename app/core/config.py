@@ -67,6 +67,35 @@ class Settings(BaseSettings):
     # Compliance
     mandatory_clause_threshold: float = 0.75
 
+    # Risk Scoring Configuration (Step 3)
+    risk_weight_compliance_severity: float = 0.40
+    risk_weight_regulatory_criticality: float = 0.20
+    risk_weight_gap_severity: float = 0.15
+    risk_weight_evidence_strength: float = 0.15
+    risk_weight_confidence: float = 0.10
+    default_regulatory_criticality: str = "MEDIUM"
+
+    @property
+    def risk_weights(self) -> dict[str, float]:
+        return {
+            "compliance_severity": self.risk_weight_compliance_severity,
+            "regulatory_criticality": self.risk_weight_regulatory_criticality,
+            "gap_severity": self.risk_weight_gap_severity,
+            "evidence_strength": self.risk_weight_evidence_strength,
+            "confidence": self.risk_weight_confidence,
+        }
+
+    # LLM
+    llm_provider: str = Field(default="openai", description="openai | mock")
+    llm_model: str = "gpt-4o-mini"
+    llm_api_key: str | None = None
+    llm_temperature: float = 0.0
+    llm_timeout_seconds: float = 30.0
+
+    @property
+    def effective_llm_api_key(self) -> str | None:
+        return self.llm_api_key or self.openai_api_key
+
     # Logging
     log_level: str = "INFO"
     log_json: bool = False
