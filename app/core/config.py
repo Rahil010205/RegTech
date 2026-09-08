@@ -100,9 +100,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = False
 
-    # Security (future auth)
+    # Security
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    otp_ttl_seconds: int = 600
+    otp_resend_seconds: int = 30
+
+    # Transactional email (OTP)
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_use_tls: bool = True
 
     @property
     def raw_data_dir(self) -> Path:

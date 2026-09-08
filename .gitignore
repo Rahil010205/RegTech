@@ -15,7 +15,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -56,8 +56,14 @@ logs/
 
 # Models cache
 .cache/
-models/
+/models/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Node / Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/*.tsbuildinfo

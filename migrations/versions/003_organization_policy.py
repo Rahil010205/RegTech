@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-from app.models.clause import EMBEDDING_DIMENSION
+EMBEDDING_DIMENSION = 1024
 
 revision: str = "003_org_policy"
 down_revision: Union[str, None] = "002_pgvector"
