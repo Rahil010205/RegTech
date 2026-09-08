@@ -12,6 +12,7 @@ from app.models.base import Base
 from app.models import (  # noqa: F401
     audit_log,
     clause,
+    compliance_assessment,
     compliance_run,
     document,
     organization,
