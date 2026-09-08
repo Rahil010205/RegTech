@@ -9,12 +9,17 @@ from fastapi.responses import JSONResponse
 from app.api.dependencies.services import (
     get_compliance_analysis_service,
     get_compliance_risk_scoring_service,
+    get_document_compliance_service,
     get_organization_policy_service,
     get_regulatory_policy_matching_service,
 )
 from app.api.schemas.compliance_analysis import (
     ComplianceAnalysisRequest,
     ComplianceAnalysisResponse,
+)
+from app.api.schemas.document_compliance import (
+    DocumentComplianceRequest,
+    DocumentComplianceReportResponse,
 )
 from app.api.schemas.matching import (
     RegulatoryPolicyMatchRequest,
@@ -34,6 +39,7 @@ from app.api.schemas.risk_scoring import (
 from app.core.constants import OrganizationDocumentStatus
 from app.services.compliance_analysis import ComplianceAnalysisService
 from app.services.compliance_risk_scoring import ComplianceRiskScoringService
+from app.services.document_compliance_service import DocumentComplianceService
 from app.services.organization_policy_service import OrganizationPolicyService
 from app.services.regulatory_policy_matching import RegulatoryPolicyMatchingService
 
@@ -185,5 +191,49 @@ def evaluate_compliance_risk(
         regulatory_clause_id=request.regulatory_clause_id,
         top_k=request.top_k,
         similarity_threshold=request.similarity_threshold,
+    )
+
+
+@router.post(
+    "/{organization_id}/documents/{policy_document_id}/compliance-analysis",
+    response_model=DocumentComplianceReportResponse,
+    summary="Run document-level compliance analysis for an organization policy document",
+)
+def analyze_document_compliance(
+    organization_id: UUID,
+    policy_document_id: UUID,
+    request: DocumentComplianceRequest,
+    service: Annotated[
+        DocumentComplianceService,
+        Depends(get_document_compliance_service),
+    ],
+) -> DocumentComplianceReportResponse:
+    """Analyze all policy clauses in a document against relevant regulatory requirements."""
+    payload = service.analyze_document(
+        organization_id=organization_id,
+        policy_document_id=policy_document_id,
+        top_k=request.top_k,
+        similarity_threshold=request.similarity_threshold,
+    )
+    return DocumentComplianceReportResponse.model_validate(payload)
+
+
+@router.get(
+    "/{organization_id}/documents/{policy_document_id}/compliance-report",
+    response_model=DocumentComplianceReportResponse,
+    summary="Get previously generated document-level compliance report",
+)
+def get_document_compliance_report(
+    organization_id: UUID,
+    policy_document_id: UUID,
+    service: Annotated[
+        DocumentComplianceService,
+        Depends(get_document_compliance_service),
+    ],
+) -> DocumentComplianceReportResponse:
+    """Retrieve the persisted document-level compliance report for an organization policy document."""
+    return service.list_reports(
+        organization_id=organization_id,
+        policy_document_id=policy_document_id,
     )
 

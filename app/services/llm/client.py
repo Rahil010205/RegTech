@@ -1,12 +1,13 @@
 """LLM client abstraction supporting OpenAI API and mock implementations."""
 
-from abc import ABC, abstractmethod
 import json
 import logging
+from abc import ABC, abstractmethod
 from typing import TypeVar
 
 import httpx
-from pydantic import BaseModel, ValidationError as PydanticValidationError
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import (
@@ -49,7 +50,7 @@ class LLMClient(ABC):
 
 
 class OpenAILLMClient(LLMClient):
-    """OpenAI API client implementation using standard HTTP requests."""
+    """OpenAI-compatible chat client using standard HTTP requests."""
 
     def __init__(
         self,
@@ -58,12 +59,14 @@ class OpenAILLMClient(LLMClient):
         temperature: float = 0.0,
         timeout_seconds: float = 30.0,
         base_url: str = "https://api.openai.com/v1",
+        response_format: str = "json_schema",
     ) -> None:
         self._api_key = api_key
         self.model = model
         self.temperature = temperature
         self.timeout_seconds = timeout_seconds
         self.base_url = base_url.rstrip("/")
+        self.response_format = response_format
 
     def generate_structured(
         self,
@@ -73,7 +76,8 @@ class OpenAILLMClient(LLMClient):
     ) -> T:
         if not self._api_key:
             raise LLMServiceError(
-                "Compliance analysis service is temporarily unavailable (LLM API key is not configured)."
+                "Compliance analysis service is temporarily unavailable "
+                "(LLM API key is not configured)."
             )
 
         headers = {
@@ -81,7 +85,6 @@ class OpenAILLMClient(LLMClient):
             "Content-Type": "application/json",
         }
 
-        schema_json = response_schema.model_json_schema()
         payload = {
             "model": self.model,
             "messages": [
@@ -89,15 +92,18 @@ class OpenAILLMClient(LLMClient):
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": self.temperature,
-            "response_format": {
+        }
+        if self.response_format == "json_object":
+            payload["response_format"] = {"type": "json_object"}
+        else:
+            payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": response_schema.__name__,
                     "strict": True,
-                    "schema": schema_json,
+                    "schema": response_schema.model_json_schema(),
                 },
-            },
-        }
+            }
 
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
@@ -113,10 +119,14 @@ class OpenAILLMClient(LLMClient):
             raise LLMTimeoutError(f"LLM request timed out after {self.timeout_seconds}s") from exc
         except httpx.HTTPStatusError as exc:
             logger.error("LLM provider returned HTTP %s", exc.response.status_code)
-            raise LLMServiceError("Compliance analysis service is temporarily unavailable.") from exc
+            raise LLMServiceError(
+                "Compliance analysis service is temporarily unavailable."
+            ) from exc
         except httpx.RequestError as exc:
             logger.error("LLM provider connection error: %s", type(exc).__name__)
-            raise LLMServiceError("Compliance analysis service is temporarily unavailable.") from exc
+            raise LLMServiceError(
+                "Compliance analysis service is temporarily unavailable."
+            ) from exc
 
         try:
             content = data["choices"][0]["message"]["content"]
@@ -174,9 +184,20 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient:
     cfg = settings or get_settings()
     if cfg.llm_provider.lower() == "mock":
         return MockLLMClient()
+    provider = cfg.llm_provider.lower()
+    if provider == "groq":
+        base_url = "https://api.groq.com/openai/v1"
+        response_format = "json_object"
+    elif provider == "openai":
+        base_url = cfg.llm_base_url
+        response_format = "json_schema"
+    else:
+        raise LLMServiceError(f"Unsupported LLM provider: {cfg.llm_provider}")
     return OpenAILLMClient(
         api_key=cfg.effective_llm_api_key,
         model=cfg.llm_model,
         temperature=cfg.llm_temperature,
         timeout_seconds=cfg.llm_timeout_seconds,
+        base_url=base_url,
+        response_format=response_format,
     )

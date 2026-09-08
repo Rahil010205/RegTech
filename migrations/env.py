@@ -6,7 +6,21 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
-target_metadata = None
+from app.models.base import Base
+
+# Import all models so Alembic detects them
+from app.models import (  # noqa: F401
+    audit_log,
+    clause,
+    compliance_assessment,
+    compliance_run,
+    document,
+    organization,
+    organization_document,
+    organization_policy_chunk,
+    regulation,
+    user,
+)
 
 config = context.config
 settings = get_settings()

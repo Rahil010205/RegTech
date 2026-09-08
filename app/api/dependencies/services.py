@@ -13,6 +13,7 @@ from app.services.regulation_service import RegulationService
 from app.services.report_service import ReportService
 from app.services.compliance_analysis import ComplianceAnalysisService
 from app.services.compliance_risk_scoring import ComplianceRiskScoringService
+from app.services.document_compliance_service import DocumentComplianceService
 from app.services.regulatory_policy_matching import RegulatoryPolicyMatchingService
 from app.services.search_service import SearchService
 
@@ -66,3 +67,9 @@ def get_compliance_risk_scoring_service(
         compliance_analysis_service=compliance_analysis_service,
         db_session=db,
     )
+
+
+def get_document_compliance_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentComplianceService:
+    return DocumentComplianceService(db)

@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="openai", description="openai | mock")
     llm_model: str = "gpt-4o-mini"
     llm_api_key: str | None = None
+    llm_base_url: str = "https://api.openai.com/v1"
     llm_temperature: float = 0.0
     llm_timeout_seconds: float = 30.0
 
