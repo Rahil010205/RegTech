@@ -264,8 +264,6 @@ class DocumentComplianceService:
             matches: list[dict[str, Any]] = []
             for row in result:
                 score = float(row["matching_score"])
-                if score < float(similarity_threshold):
-                    continue
                 matches.append(
                     {
                         "regulatory_clause_id": row["regulatory_clause_id"],
@@ -318,10 +316,7 @@ class DocumentComplianceService:
                 }
             )
 
-        return [
-            item for item in regulatory_matches
-            if float(item["matching_score"]) >= float(similarity_threshold)
-        ]
+        return regulatory_matches
 
     @staticmethod
     def _summarize_results(results: list[DocumentComplianceAssessmentResult]) -> dict[str, int]:

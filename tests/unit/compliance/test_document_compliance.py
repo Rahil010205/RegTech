@@ -132,3 +132,42 @@ def test_match_policy_clause_uses_existing_regulatory_clause_ids():
     assert matches
     assert matches[0]["regulatory_clause_id"] == real_clause.id
     assert matches[0]["regulatory_requirement"] == real_clause.text
+
+
+def test_match_policy_clause_keeps_classified_matches_below_similarity_threshold():
+    real_clause = Clause(
+        id=uuid4(),
+        version_id=uuid4(),
+        clause_number="1.1",
+        section="Customer Identification",
+        title="Customer Identity Verification",
+        text="Verify customer identity before account opening.",
+        page_number=3,
+        metadata_={},
+    )
+
+    class FakeScalarResult:
+        def all(self):
+            return [real_clause]
+
+    service = DocumentComplianceService(session=SimpleNamespace(scalars=lambda stmt: FakeScalarResult()))
+    policy_chunk = OrganizationPolicyChunk(
+        id=uuid4(),
+        document_id=uuid4(),
+        organization_id=uuid4(),
+        chunk_index=1,
+        section_title="Customer ID",
+        clause_reference="1.1",
+        content="Customer identity is verified before onboarding.",
+        embedding=[0.1] * 1024,
+    )
+
+    matches = service._match_policy_clause(
+        organization_id=uuid4(),
+        policy_clause=policy_chunk,
+        top_k=5,
+        similarity_threshold=0.95,
+    )
+
+    assert len(matches) == 1
+    assert matches[0]["status"] == "COMPLIANT"
