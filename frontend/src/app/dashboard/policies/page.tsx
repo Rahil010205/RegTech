@@ -12,55 +12,39 @@ import {
   Loader2,
   Clock,
   XCircle,
+  Building2,
+  AlertCircle,
 } from "lucide-react";
-import { listOrgDocuments, MOCK_ORG_ID } from "@/lib/api-client";
-import type { PolicyDocument, ProcessingStatus } from "@/types/api";
+import { listOrgDocuments } from "@/lib/api-client";
+import { useOrganizations } from "@/hooks/use-organizations";
+import { DemoBadge } from "@/components/shared/DemoBadge";
+import type { PolicyDocument } from "@/types/api";
 
-const MOCK_POLICIES: PolicyDocument[] = [
+/**
+ * Demo-only mock policies. In normal mode, only real API data is shown.
+ * Fields match the backend DocumentResponse schema (filename, doc_type, created_at).
+ */
+const DEMO_POLICIES: PolicyDocument[] = [
   {
     id: "doc_001",
-    org_id: MOCK_ORG_ID,
-    title: "Company KYC Standard Operating Procedure",
-    document_type: "KYC_SOP",
+    org_id: "demo",
+    filename: "Company KYC Standard Operating Procedure.pdf",
+    doc_type: "KYC_SOP",
     status: "COMPLETED",
-    chunk_count: 48,
-    uploaded_at: "2024-03-10T10:00:00Z",
-    uploaded_by: "compliance@acmecorp.com",
+    created_at: "2024-03-10T10:00:00Z",
   },
   {
     id: "doc_002",
-    org_id: MOCK_ORG_ID,
-    title: "Anti-Money Laundering Policy 2024",
-    document_type: "AML_POLICY",
+    org_id: "demo",
+    filename: "Anti-Money Laundering Policy 2024.pdf",
+    doc_type: "AML_POLICY",
     status: "COMPLETED",
-    chunk_count: 32,
-    uploaded_at: "2024-02-28T14:00:00Z",
-    uploaded_by: "legal@acmecorp.com",
-  },
-  {
-    id: "doc_003",
-    org_id: MOCK_ORG_ID,
-    title: "Enterprise Risk Management Framework",
-    document_type: "RISK_FRAMEWORK",
-    status: "PROCESSING",
-    chunk_count: 0,
-    uploaded_at: "2024-03-12T09:30:00Z",
-    uploaded_by: "risk@acmecorp.com",
-  },
-  {
-    id: "doc_004",
-    org_id: MOCK_ORG_ID,
-    title: "Q4 Internal Audit Report",
-    document_type: "INTERNAL_AUDIT",
-    status: "COMPLETED",
-    chunk_count: 67,
-    uploaded_at: "2024-01-20T16:00:00Z",
-    uploaded_by: "audit@acmecorp.com",
+    created_at: "2024-02-28T14:00:00Z",
   },
 ];
 
 const STATUS_CONFIG: Record<
-  ProcessingStatus,
+  string,
   { icon: React.ReactNode; label: string; className: string }
 > = {
   COMPLETED: {
@@ -68,7 +52,22 @@ const STATUS_CONFIG: Record<
     label: "Indexed",
     className: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
   },
+  completed: {
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    label: "Indexed",
+    className: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
+  },
+  processed: {
+    icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+    label: "Processed",
+    className: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
+  },
   PROCESSING: {
+    icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
+    label: "Processing",
+    className: "text-blue-300 bg-blue-500/10 border-blue-500/30",
+  },
+  processing: {
     icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
     label: "Processing",
     className: "text-blue-300 bg-blue-500/10 border-blue-500/30",
@@ -78,54 +77,94 @@ const STATUS_CONFIG: Record<
     label: "Pending",
     className: "text-zinc-400 bg-zinc-500/10 border-zinc-500/30",
   },
+  pending: {
+    icon: <Clock className="h-3.5 w-3.5" />,
+    label: "Pending",
+    className: "text-zinc-400 bg-zinc-500/10 border-zinc-500/30",
+  },
+  uploaded: {
+    icon: <Clock className="h-3.5 w-3.5" />,
+    label: "Uploaded",
+    className: "text-zinc-400 bg-zinc-500/10 border-zinc-500/30",
+  },
   FAILED: {
+    icon: <XCircle className="h-3.5 w-3.5" />,
+    label: "Failed",
+    className: "text-red-300 bg-red-500/10 border-red-500/30",
+  },
+  failed: {
     icon: <XCircle className="h-3.5 w-3.5" />,
     label: "Failed",
     className: "text-red-300 bg-red-500/10 border-red-500/30",
   },
 };
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  KYC_SOP: "KYC SOP",
-  AML_POLICY: "AML Policy",
-  RISK_FRAMEWORK: "Risk Framework",
-  INTERNAL_AUDIT: "Internal Audit",
-  OTHER: "Other",
-};
-
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  try {
+    return new Date(iso).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/** Strip .pdf extension and truncate long filenames for display */
+function displayName(filename: string): string {
+  return filename.replace(/\.pdf$/i, "").trim();
 }
 
 export default function PoliciesPage() {
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+  const { activeOrgId, activeOrganization } = useOrganizations();
   const [policies, setPolicies] = useState<PolicyDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!activeOrgId) {
+      // No org selected: show demo data in demo mode, empty list in normal mode
+      setPolicies(isDemoMode ? DEMO_POLICIES : []);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    listOrgDocuments(MOCK_ORG_ID)
+    setErrorMsg(null);
+
+    listOrgDocuments(activeOrgId)
       .then((data) => {
-        if (!cancelled) setPolicies(data);
+        if (cancelled) return;
+        const docsList = Array.isArray(data) ? data : (data?.items ?? []);
+        setPolicies(docsList);
       })
-      .catch(() => {
-        if (!cancelled) setPolicies(MOCK_POLICIES);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (isDemoMode) {
+          setPolicies(DEMO_POLICIES);
+        } else {
+          setPolicies([]);
+          setErrorMsg(
+            err instanceof Error ? err.message : "Failed to load policy documents from server.",
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeOrgId, isDemoMode]);
 
   const filtered = policies.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase()),
+    (p.filename ?? "").toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -142,11 +181,18 @@ export default function PoliciesPage() {
             <FileStack className="h-5 w-5 text-emerald-400" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">My Policies</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">My Policies</h1>
+              {isDemoMode && <DemoBadge />}
+            </div>
             <p className="text-sm text-zinc-500">
               {policies.length} document{policies.length !== 1 ? "s" : ""}{" "}
               uploaded · Org:{" "}
-              <span className="font-mono text-zinc-600">{MOCK_ORG_ID}</span>
+              {activeOrgId ? (
+                <span className="font-mono text-zinc-300">{activeOrganization?.name || activeOrgId}</span>
+              ) : (
+                <span className="text-amber-400 font-medium">(none selected)</span>
+              )}
             </p>
           </div>
         </div>
@@ -159,6 +205,20 @@ export default function PoliciesPage() {
           Upload Policy
         </Link>
       </div>
+
+      {!activeOrgId && !isDemoMode && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300 text-sm">
+          <Building2 className="h-5 w-5 shrink-0" />
+          <span>Please select an active organization in the top navigation bar to view its policy documents.</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400 text-sm font-medium">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -192,7 +252,11 @@ export default function PoliciesPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {filtered.map((doc, i) => {
-            const statusCfg = STATUS_CONFIG[doc.status];
+            const statusCfg = STATUS_CONFIG[doc.status] || {
+              icon: <Clock className="h-3.5 w-3.5" />,
+              label: doc.status,
+              className: "text-zinc-400 bg-zinc-500/10 border-zinc-500/30",
+            };
             return (
               <motion.div
                 key={doc.id}
@@ -204,10 +268,10 @@ export default function PoliciesPage() {
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-medium text-zinc-200">
-                      {doc.title}
+                      {displayName(doc.filename)}
                     </p>
                     <p className="mt-0.5 text-xs text-zinc-500">
-                      {DOC_TYPE_LABELS[doc.document_type] ?? doc.document_type}
+                      {doc.doc_type || "—"}
                     </p>
                   </div>
                   <span
@@ -218,11 +282,7 @@ export default function PoliciesPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-zinc-600">
-                  <span>
-                    {doc.status === "COMPLETED" ? `${doc.chunk_count} chunks` : "—"}
-                  </span>
-                  <span>·</span>
-                  <span>{formatDate(doc.uploaded_at)}</span>
+                  <span>{doc.created_at ? formatDate(doc.created_at) : "Just now"}</span>
                 </div>
               </motion.div>
             );

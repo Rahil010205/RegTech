@@ -32,6 +32,9 @@ from app.api.schemas.organization_document import (
     OrganizationPolicySearchResponse,
     OrganizationResponse,
 )
+from fastapi import Query
+from app.api.schemas.organization import PaginatedOrganizationResponse
+from app.api.schemas.common import PaginationParams
 from app.api.schemas.risk_scoring import (
     RiskScoringRequest,
     RiskScoringResponse,
@@ -53,6 +56,17 @@ def create_organization(
 ) -> OrganizationResponse:
     """Create a new organization tenant."""
     return service.create_organization(payload)
+
+
+@router.get("", response_model=PaginatedOrganizationResponse)
+@router.get("/", response_model=PaginatedOrganizationResponse, include_in_schema=False)
+def list_organizations(
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> PaginatedOrganizationResponse:
+    """List organizations with pagination."""
+    return service.list_organizations(skip=skip, limit=limit)
 
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)

@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
 
     # Database
-    database_url: str = "postgresql+psycopg2://regtech:regtech@localhost:5432/regtech"
+    database_url: str = "postgresql+psycopg2://regtech:regtech@localhost:5433/regtech"
     db_pool_size: int = 10
     db_max_overflow: int = 20
 

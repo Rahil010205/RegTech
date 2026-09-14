@@ -19,6 +19,11 @@ class Regulator(Base):
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     jurisdiction: Mapped[str] = mapped_column(sa.String(50), nullable=False)
 
+    # Back‑populates relationship to regulations
+    regulations: Mapped[list["Regulation"]] = relationship(
+        "Regulation", back_populates="regulator", cascade="all, delete-orphan"
+    )
+
 
 class Regulation(Base):
     """Global regulatory document issued by an authority."""
@@ -31,6 +36,9 @@ class Regulation(Base):
     document_type: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="CIRCULAR")
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())
+
+    # Relationship to regulator
+    regulator: Mapped[Regulator] = relationship("Regulator", back_populates="regulations")
 
     versions: Mapped[list["RegulationVersion"]] = relationship(back_populates="regulation", cascade="all, delete-orphan")
 

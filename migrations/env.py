@@ -22,6 +22,8 @@ from app.models import (  # noqa: F401
     user,
 )
 
+target_metadata = Base.metadata
+
 config = context.config
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)

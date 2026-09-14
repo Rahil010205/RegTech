@@ -1,138 +1,29 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, ShieldCheck, Sparkles, ArrowRight, X } from "lucide-react";
-import { runComplianceRisk, MOCK_ORG_ID } from "@/lib/api-client";
-import { ComplianceResultCard } from "@/components/ui/compliance-result-card";
-import { RiskBadge } from "@/components/ui/risk-badge";
-import type { ComplianceRiskResponse, RiskMatch } from "@/types/api";
-
-// ─── Rich mock response for demo ─────────────────────────────────────────────
-function buildMockResponse(query: string): ComplianceRiskResponse {
-  const matches: RiskMatch[] = [
-    {
-      regulatory_clause: {
-        id: "clause_rbi_kyc_001",
-        regulation_id: "reg_001",
-        regulation_title: "RBI Master Direction on KYC 2023",
-        regulator_code: "RBI",
-        clause_number: "16(a)",
-        text: "Every Regulated Entity (RE) shall establish and implement a Customer Due Diligence (CDD) policy that encompasses risk-based categorisation of customers, continuous transaction monitoring, and periodic review of high-risk accounts at intervals not exceeding twelve months.",
-        similarity_score: 0.91,
-      },
-      policy_chunks: [
-        {
-          id: "chunk_001",
-          document_id: "doc_001",
-          document_title: "Company KYC SOP",
-          chunk_index: 4,
-          text: "Section 3.2: All new customers shall be categorized as Low, Medium, or High risk based on the scoring matrix defined in Annexure A. High-risk customers shall be subject to Enhanced Due Diligence (EDD) procedures and reviewed annually.",
-          similarity_score: 0.88,
-        },
-        {
-          id: "chunk_002",
-          document_id: "doc_001",
-          document_title: "Company KYC SOP",
-          chunk_index: 12,
-          text: "Section 6.1: Transaction monitoring alerts are generated automatically by the AML system for transactions exceeding threshold limits. Relationship Managers are required to review and close alerts within 5 business days.",
-          similarity_score: 0.74,
-        },
-      ],
-      risk_score: 18,
-      compliance_status: "COMPLIANT",
-      reasoning:
-        "The organization's KYC SOP demonstrates strong alignment with RBI's CDD requirements. Risk categorization, EDD procedures, and annual review cycles are explicitly documented. Transaction monitoring is automated with clear SLA commitments.",
-      identified_gaps: [],
-    },
-    {
-      regulatory_clause: {
-        id: "clause_rbi_kyc_031",
-        regulation_id: "reg_001",
-        regulation_title: "RBI Master Direction on KYC 2023",
-        regulator_code: "RBI",
-        clause_number: "31(b)",
-        text: "Regulated Entities must maintain KYC records for a minimum of eight years after the end of the business relationship. Records must be retrievable within 24 hours upon regulatory request and stored in tamper-evident format.",
-        similarity_score: 0.83,
-      },
-      policy_chunks: [
-        {
-          id: "chunk_003",
-          document_id: "doc_001",
-          document_title: "Company KYC SOP",
-          chunk_index: 18,
-          text: "Section 8: Customer records shall be retained for a period of 5 years from the date of closure of account or termination of business relationship, whichever is later.",
-          similarity_score: 0.69,
-        },
-      ],
-      risk_score: 76,
-      compliance_status: "NON_COMPLIANT",
-      reasoning:
-        "Critical gap identified: the organization's retention policy specifies 5 years while RBI mandates a minimum of 8 years. Additionally, the SOP does not address tamper-evident storage requirements or the 24-hour retrieval SLA. Immediate remediation is required.",
-      identified_gaps: [
-        {
-          description:
-            "Record retention period is 5 years in policy; RBI requires minimum 8 years.",
-          severity: "CRITICAL",
-        },
-        {
-          description: "No mention of tamper-evident storage format.",
-          severity: "HIGH",
-        },
-        {
-          description:
-            "24-hour retrieval SLA upon regulatory request not documented.",
-          severity: "HIGH",
-        },
-      ],
-    },
-    {
-      regulatory_clause: {
-        id: "clause_rbi_kyc_055",
-        regulation_id: "reg_001",
-        regulation_title: "RBI Master Direction on KYC 2023",
-        regulator_code: "RBI",
-        clause_number: "55(c)",
-        text: "REs shall designate a Principal Officer (PO) responsible for KYC/AML compliance. The PO shall have direct reporting access to the Board and shall submit quarterly compliance reports.",
-        similarity_score: 0.77,
-      },
-      policy_chunks: [
-        {
-          id: "chunk_004",
-          document_id: "doc_002",
-          document_title: "Anti-Money Laundering Policy 2024",
-          chunk_index: 2,
-          text: "The Chief Compliance Officer (CCO) is designated as the Principal Officer for AML/KYC purposes. The CCO reports to the Board Risk Committee on a semi-annual basis.",
-          similarity_score: 0.82,
-        },
-      ],
-      risk_score: 42,
-      compliance_status: "PARTIALLY_COMPLIANT",
-      reasoning:
-        "A Principal Officer is designated and has Board-level access. However, the organization reports semi-annually while RBI mandates quarterly reporting. This is a moderate gap requiring process adjustment.",
-      identified_gaps: [
-        {
-          description:
-            "Reporting frequency is semi-annual; RBI mandates quarterly compliance reports to the Board.",
-          severity: "MEDIUM",
-        },
-      ],
-    },
-  ];
-
-  const overallScore = Math.round(
-    matches.reduce((sum, m) => sum + m.risk_score, 0) / matches.length,
-  );
-
-  return {
-    org_id: MOCK_ORG_ID,
-    query,
-    matches,
-    overall_risk_score: overallScore,
-    summary: `Analysis complete for query: "${query}". Found ${matches.length} regulatory clauses. ${matches.filter((m) => m.compliance_status === "NON_COMPLIANT").length} critical non-compliance issues require immediate attention.`,
-    evaluated_at: new Date().toISOString(),
-  };
-}
+import { motion } from "framer-motion";
+import {
+  Search,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight,
+  X,
+  Building2,
+  AlertCircle,
+  FileText,
+  AlertTriangle,
+  TrendingUp,
+} from "lucide-react";
+import { useOrganizations } from "@/hooks/use-organizations";
+import {
+  searchRegulatoryClauses,
+  evaluateComplianceRisk,
+} from "@/lib/api-client";
+import { DemoBadge } from "@/components/shared/DemoBadge";
+import type {
+  RegulatoryClauseResult,
+  RiskScoringResponse,
+} from "@/types/api";
 
 const EXAMPLE_QUERIES = [
   "KYC customer due diligence requirements",
@@ -142,87 +33,217 @@ const EXAMPLE_QUERIES = [
   "Risk categorization and EDD procedures",
 ];
 
+// Fallback mock risk response (demo mode only) — matches real RiskScoringResponse schema
+function buildMockRiskResponse(clauseId: string, orgId: string): RiskScoringResponse {
+  return {
+    organization_id: orgId,
+    regulatory_clause_id: clauseId,
+    compliance_status: "PARTIALLY_COMPLIANT",
+    risk_score: 42.5,
+    risk_level: "MEDIUM",
+    confidence: 0.72,
+    explanation:
+      "Demo Mode Analysis: The organization's policy documents demonstrate partial alignment with the selected regulatory clause. High-risk account review schedules and Board-level reporting frequency require adjustment. Assessed compliance risk score is 42.50 (MEDIUM). Status PARTIALLY_COMPLIANT contributes 20.00 points (weight 40%). Regulatory clause criticality is MEDIUM (0.50), contributing 10.00 points (weight 20%).",
+    factor_breakdown: {
+      compliance_severity: { value: 0.5, weight: 0.4, contribution: 20.0, description: "PARTIALLY_COMPLIANT status maps to 0.50 severity." },
+      regulatory_criticality: { value: 0.5, weight: 0.2, contribution: 10.0, description: "Regulatory clause criticality is MEDIUM (0.50)." },
+      gap_severity: { value: 0.5, weight: 0.15, contribution: 7.5, description: "Maximum identified gap severity is MEDIUM (0.50)." },
+      evidence_strength: { value: 0.72, weight: 0.15, contribution: 10.8, description: "Average verified evidence similarity is 0.72." },
+      confidence: { value: 0.72, weight: 0.10, contribution: 7.2, description: "Step 2B analysis confidence is 0.72." },
+    },
+    identified_gaps: [
+      {
+        description: "Policy does not specify review intervals for high-risk customers (semi-annual vs required quarterly).",
+        severity: "MEDIUM",
+      },
+      {
+        description: "Board reporting on AML metrics is on a semi-annual basis; clause requires quarterly reporting.",
+        severity: "LOW",
+      },
+    ],
+    created_at: new Date().toISOString(),
+  };
+}
+
+const RISK_LEVEL_CLASSES: Record<string, string> = {
+  CRITICAL: "border-red-500/40 bg-red-500/20 text-red-300",
+  HIGH: "border-orange-500/40 bg-orange-500/20 text-orange-300",
+  MEDIUM: "border-amber-500/40 bg-amber-500/20 text-amber-300",
+  LOW: "border-emerald-500/40 bg-emerald-500/20 text-emerald-300",
+};
+
+const GAP_SEVERITY_CLASSES: Record<string, string> = {
+  CRITICAL: "text-red-300 bg-red-500/10 border-red-500/30",
+  HIGH: "text-orange-300 bg-orange-500/10 border-orange-500/30",
+  MEDIUM: "text-amber-300 bg-amber-500/10 border-amber-500/30",
+  LOW: "text-zinc-400 bg-zinc-500/10 border-zinc-500/30",
+};
+
 export default function CompliancePage() {
+  const { activeOrgId, activeOrganization } = useOrganizations();
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   const [query, setQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [result, setResult] = useState<ComplianceRiskResponse | null>(null);
+  const [isSearchingClauses, setIsSearchingClauses] = useState(false);
+  const [clauses, setClauses] = useState<RegulatoryClauseResult[]>([]);
+  const [selectedClause, setSelectedClause] = useState<RegulatoryClauseResult | null>(null);
+
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [riskResult, setRiskResult] = useState<RiskScoringResponse | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSearch = useCallback(
+  // Step 1: Search for regulatory clauses
+  const handleClauseSearch = useCallback(
     async (searchQuery?: string) => {
       const q = (searchQuery ?? query).trim();
       if (!q) return;
 
       setQuery(q);
-      setIsSearching(true);
+      setIsSearchingClauses(true);
+      setErrorMsg(null);
+      setRiskResult(null);
+      setSelectedClause(null);
       setHasSearched(true);
 
       try {
-        const data = await runComplianceRisk(MOCK_ORG_ID, { query: q, top_k: 5 });
-        setResult(data);
-      } catch {
-        // Demo fallback — always show rich results
-        await new Promise((r) => setTimeout(r, 1200));
-        setResult(buildMockResponse(q));
+        const data = await searchRegulatoryClauses(q, 5);
+        const results = data?.results ?? [];
+        setClauses(results);
+
+        if (results.length === 0 && !isDemoMode) {
+          setErrorMsg(`No regulatory clauses found matching "${q}". Ensure regulatory documents have been uploaded and indexed.`);
+        } else if (results.length === 0 && isDemoMode) {
+          // Demo mode mock clauses
+          setClauses([
+            {
+              clause_id: "clause_rbi_kyc_001",
+              document_id: "doc_rbi_kyc_2023",
+              document_name: "RBI Master Direction on KYC 2023",
+              regulator: "RBI",
+              clause_number: "16(a)",
+              text: "Every Regulated Entity (RE) shall establish and implement a Customer Due Diligence (CDD) policy that encompasses risk-based categorisation of customers, continuous transaction monitoring, and periodic review of high-risk accounts at intervals not exceeding twelve months.",
+              similarity: 0.91,
+            },
+            {
+              clause_id: "clause_rbi_kyc_031",
+              document_id: "doc_rbi_kyc_2023",
+              document_name: "RBI Master Direction on KYC 2023",
+              regulator: "RBI",
+              clause_number: "31(b)",
+              text: "Regulated Entities must maintain KYC records for a minimum of eight years after the end of the business relationship in a retrievable and tamper-evident format.",
+              similarity: 0.84,
+            },
+          ]);
+        }
+      } catch (err: unknown) {
+        if (isDemoMode) {
+          setClauses([
+            {
+              clause_id: "clause_rbi_kyc_001",
+              document_id: "doc_rbi_kyc_2023",
+              document_name: "RBI Master Direction on KYC 2023",
+              regulator: "RBI",
+              clause_number: "16(a)",
+              text: "Every Regulated Entity (RE) shall establish and implement a Customer Due Diligence (CDD) policy that encompasses risk-based categorisation of customers, continuous transaction monitoring, and periodic review of high-risk accounts at intervals not exceeding twelve months.",
+              similarity: 0.91,
+            },
+          ]);
+        } else {
+          setErrorMsg(
+            err instanceof Error ? err.message : "Failed to search regulatory clauses. Ensure the API is running.",
+          );
+        }
       } finally {
-        setIsSearching(false);
+        setIsSearchingClauses(false);
       }
     },
-    [query],
+    [query, isDemoMode],
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") handleSearch();
+  // Step 2: Evaluate compliance risk for the selected regulatory clause
+  const handleEvaluateRisk = useCallback(
+    async (clause: RegulatoryClauseResult) => {
+      if (!activeOrgId) {
+        setErrorMsg("An active organization must be selected before evaluating compliance.");
+        return;
+      }
+
+      setSelectedClause(clause);
+      setIsEvaluating(true);
+      setErrorMsg(null);
+      setRiskResult(null);
+
+      try {
+        const result = await evaluateComplianceRisk(activeOrgId, clause.clause_id, 5, 0.5);
+        setRiskResult(result);
+      } catch (err: unknown) {
+        if (isDemoMode) {
+          await new Promise((r) => setTimeout(r, 800));
+          setRiskResult(buildMockRiskResponse(clause.clause_id, activeOrgId));
+        } else {
+          setErrorMsg(
+            err instanceof Error
+              ? `Compliance Risk API Error: ${err.message}`
+              : "Failed to evaluate compliance risk for selected clause.",
+          );
+        }
+      } finally {
+        setIsEvaluating(false);
+      }
     },
-    [handleSearch],
+    [activeOrgId, isDemoMode],
   );
 
   const handleClear = useCallback(() => {
     setQuery("");
-    setResult(null);
+    setClauses([]);
+    setSelectedClause(null);
+    setRiskResult(null);
+    setErrorMsg(null);
     setHasSearched(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   return (
-    <div className="mx-auto max-w-4xl">
-      {/* Animated search bar — centered when no results, top when results present */}
+    <div className="mx-auto max-w-4xl space-y-6">
+      {/* No active org alert */}
+      {!activeOrgId && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300">
+          <Building2 className="h-5 w-5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold">No Active Organization Selected</p>
+            <p className="text-xs text-amber-400/80">
+              Please select or create an active organization in the top navigation to run compliance evaluations against organization policy documents.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Main search card */}
       <motion.div
         layout
-        animate={hasSearched ? { marginTop: 0 } : { marginTop: "12vh" }}
-        transition={{ duration: 0.4, ease: "easeInOut" }}
+        animate={hasSearched ? { marginTop: 0 } : { marginTop: "4vh" }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
         className="space-y-4"
       >
-        {/* Hero header — only visible before first search */}
-        <AnimatePresence>
-          {!hasSearched && (
-            <motion.div
-              key="hero"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10, height: 0 }}
-              transition={{ duration: 0.35 }}
-              className="mb-8 text-center"
-            >
-              <div className="mb-4 flex justify-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/20 to-violet-600/20 shadow-2xl shadow-blue-500/10">
-                  <ShieldCheck className="h-8 w-8 text-blue-400" />
-                </div>
+        {!hasSearched && (
+          <div className="mb-6 text-center">
+            <div className="mb-3 flex justify-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-600/20 to-violet-600/20 shadow-xl">
+                <ShieldCheck className="h-7 w-7 text-blue-400" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight lg:text-3xl">
-                Compliance Search
-              </h1>
-              <p className="mt-2 text-zinc-500">
-                Semantically search regulations and analyse your organisation&apos;s
-                compliance posture with AI-powered risk scoring.
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Compliance Evaluation</h1>
+            <p className="mt-1 text-sm text-zinc-500">
+              Search regulatory clauses and evaluate compliance risk against your active organization policy documents.
+            </p>
+          </div>
+        )}
 
-        {/* Search input */}
+        {/* Input */}
         <div className="relative">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
           <input
@@ -231,12 +252,12 @@ export default function CompliancePage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about a regulation clause, obligation, or compliance topic…"
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-28 text-sm text-zinc-200 placeholder-zinc-600 outline-none shadow-lg backdrop-blur-sm transition-all focus:border-blue-500/50 focus:bg-white/[0.07] focus:ring-1 focus:ring-blue-500/30"
+            onKeyDown={(e) => e.key === "Enter" && handleClauseSearch()}
+            placeholder="Search regulatory clause or compliance requirement..."
+            className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-28 text-sm text-zinc-200 placeholder-zinc-600 outline-none shadow-lg transition-all focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30"
           />
           <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-            {(query || result) && (
+            {(query || hasSearched) && (
               <button
                 onClick={handleClear}
                 className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:text-zinc-300"
@@ -246,18 +267,18 @@ export default function CompliancePage() {
             )}
             <button
               id="compliance-search-btn"
-              onClick={() => handleSearch()}
-              disabled={!query.trim() || isSearching}
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-3 py-1.5 text-xs font-semibold text-white shadow-md transition-all hover:from-blue-500 hover:to-blue-400 disabled:opacity-40"
+              onClick={() => handleClauseSearch()}
+              disabled={!query.trim() || isSearchingClauses}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md transition-all hover:bg-blue-500 disabled:opacity-40"
             >
-              {isSearching ? (
+              {isSearchingClauses ? (
                 <>
-                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-                  Analysing…
+                  <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                  Searching...
                 </>
               ) : (
                 <>
-                  Analyse
+                  Search Clauses
                   <ArrowRight className="h-3.5 w-3.5" />
                 </>
               )}
@@ -265,100 +286,202 @@ export default function CompliancePage() {
           </div>
         </div>
 
-        {/* Example queries — visible before first search */}
-        <AnimatePresence>
-          {!hasSearched && (
-            <motion.div
-              key="examples"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-wrap justify-center gap-2"
-            >
-              {EXAMPLE_QUERIES.map((eq) => (
-                <button
-                  key={eq}
-                  onClick={() => handleSearch(eq)}
-                  className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-400 transition-all hover:border-white/15 hover:bg-white/[0.06] hover:text-zinc-300"
-                >
-                  {eq}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Example queries */}
+        {!hasSearched && (
+          <div className="flex flex-wrap justify-center gap-2 pt-2">
+            {EXAMPLE_QUERIES.map((eq) => (
+              <button
+                key={eq}
+                onClick={() => handleClauseSearch(eq)}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-zinc-400 hover:border-white/20 hover:text-zinc-200 transition-all"
+              >
+                {eq}
+              </button>
+            ))}
+          </div>
+        )}
       </motion.div>
 
-      {/* Loading skeletons */}
-      <AnimatePresence>
-        {isSearching && (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-8 space-y-3"
-          >
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="glass animate-pulse rounded-xl p-5"
-                style={{ animationDelay: `${i * 150}ms` }}
-              >
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="h-5 w-12 rounded-full bg-white/5" />
-                  <div className="h-5 w-20 rounded-full bg-white/5" />
-                  <div className="ml-auto h-5 w-16 rounded-full bg-white/5" />
-                </div>
-                <div className="space-y-2">
-                  <div className="h-3.5 w-full rounded-full bg-white/5" />
-                  <div className="h-3.5 w-4/5 rounded-full bg-white/5" />
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Error state display */}
+      {errorMsg && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p className="text-sm font-medium">{errorMsg}</p>
+        </div>
+      )}
 
-      {/* Results */}
-      <AnimatePresence>
-        {result && !isSearching && (
-          <motion.div
-            key="results"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
-            className="mt-6 space-y-4"
-          >
-            {/* Summary bar */}
-            <div className="glass flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-zinc-300">
-                  {result.matches.length} clause
-                  {result.matches.length !== 1 ? "s" : ""} analysed
-                </p>
-                <p className="text-xs text-zinc-600">{result.summary}</p>
+      {/* Step 1 Results: Selectable Clauses */}
+      {clauses.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+            <span>Select a regulatory clause to evaluate organization compliance:</span>
+            <span className="font-mono text-zinc-500">{clauses.length} clauses found</span>
+          </div>
+
+          <div className="space-y-2">
+            {clauses.map((c) => {
+              const isSelected = selectedClause?.clause_id === c.clause_id;
+              return (
+                <div
+                  key={c.clause_id}
+                  className={`rounded-xl border p-4 transition-all ${
+                    isSelected
+                      ? "border-blue-500/50 bg-blue-500/10 shadow-lg"
+                      : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        {c.regulator && (
+                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[10px] font-bold text-blue-300">
+                            {c.regulator}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-zinc-300">
+                          {c.document_name ?? "Regulatory Document"}
+                          {c.clause_number ? ` (Clause ${c.clause_number})` : ""}
+                        </span>
+                        <span className="font-mono text-[10px] text-emerald-400">
+                          {(c.similarity * 100).toFixed(0)}% match
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 leading-relaxed">{c.text}</p>
+                    </div>
+
+                    <button
+                      onClick={() => handleEvaluateRisk(c)}
+                      disabled={!activeOrgId || isEvaluating}
+                      className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40 transition-colors"
+                    >
+                      {isEvaluating && isSelected ? "Evaluating..." : "Evaluate Risk"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Step 2 Results: Compliance Risk Assessment (real backend fields) */}
+      {riskResult && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-4 rounded-xl border border-white/10 bg-zinc-900/90 p-6 shadow-2xl"
+        >
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-white">Compliance Risk Assessment</h2>
+                {isDemoMode && <DemoBadge />}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-zinc-600">Overall Risk</span>
-                <RiskBadge
-                  score={result.overall_risk_score}
-                  size="md"
-                  showLabel
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Organization: <span className="font-mono text-zinc-300">{activeOrganization?.name ?? riskResult.organization_id}</span>
+                {" · "}
+                Status:{" "}
+                <span className={`font-semibold ${
+                  riskResult.compliance_status === "COMPLIANT" ? "text-emerald-400" :
+                  riskResult.compliance_status === "PARTIALLY_COMPLIANT" ? "text-amber-400" : "text-red-400"
+                }`}>
+                  {riskResult.compliance_status.replace(/_/g, " ")}
+                </span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-xs text-zinc-500 mb-0.5">Risk Score</div>
+                <div className="text-2xl font-bold text-white">{riskResult.risk_score.toFixed(1)}<span className="text-sm text-zinc-500">/100</span></div>
+              </div>
+              <span className={`rounded-md border px-2.5 py-1 text-xs font-bold ${
+                RISK_LEVEL_CLASSES[riskResult.risk_level] ?? "border-zinc-500/40 bg-zinc-500/20 text-zinc-300"
+              }`}>
+                {riskResult.risk_level}
+              </span>
+            </div>
+          </div>
+
+          {/* Explanation */}
+          <div className="rounded-lg bg-white/5 p-4 text-xs text-zinc-300 leading-relaxed border border-white/5">
+            <p className="font-semibold text-white mb-1 flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              Risk Assessment Explanation
+            </p>
+            <p>{riskResult.explanation}</p>
+          </div>
+
+          {/* Confidence */}
+          <div className="flex items-center gap-3">
+            <TrendingUp className="h-4 w-4 text-blue-400" />
+            <span className="text-xs text-zinc-400">Analysis Confidence:</span>
+            <div className="flex-1 max-w-xs">
+              <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all"
+                  style={{ width: `${(riskResult.confidence * 100).toFixed(0)}%` }}
                 />
               </div>
             </div>
+            <span className="text-xs font-mono text-blue-400">{(riskResult.confidence * 100).toFixed(0)}%</span>
+          </div>
 
-            {/* Result cards */}
-            <div className="space-y-3">
-              {result.matches.map((match, i) => (
-                <ComplianceResultCard key={match.regulatory_clause.id} match={match} index={i} />
+          {/* Factor Breakdown */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+              Risk Factor Breakdown
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {Object.entries(riskResult.factor_breakdown).map(([key, detail]) => (
+                <div key={key} className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs">
+                  <p className="font-semibold text-zinc-200 capitalize">
+                    {key.replace(/_/g, " ")}
+                  </p>
+                  {detail.description && (
+                    <p className="text-[11px] text-zinc-400 mt-1">{detail.description}</p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                    <span>Weight: {(detail.weight * 100).toFixed(0)}%</span>
+                    <span className="font-bold text-zinc-300">+{detail.contribution.toFixed(1)} pts</span>
+                  </div>
+                </div>
               ))}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+
+          {/* Identified Gaps */}
+          {riskResult.identified_gaps && riskResult.identified_gaps.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-amber-400" />
+                Identified Compliance Gaps ({riskResult.identified_gaps.length})
+              </h3>
+              <div className="space-y-2">
+                {riskResult.identified_gaps.map((gap, idx) => (
+                  <div key={idx} className="flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs">
+                    <span className={`mt-0.5 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-bold ${
+                      GAP_SEVERITY_CLASSES[gap.severity] ?? "text-zinc-400 bg-zinc-500/10 border-zinc-500/30"
+                    }`}>
+                      {gap.severity}
+                    </span>
+                    <p className="text-zinc-300 leading-relaxed">{gap.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* No gaps state */}
+          {riskResult.identified_gaps && riskResult.identified_gaps.length === 0 && riskResult.compliance_status === "COMPLIANT" && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-400">
+              <ShieldCheck className="h-4 w-4 shrink-0" />
+              <span>No compliance gaps identified. Organization policies are compliant with this clause.</span>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 }
