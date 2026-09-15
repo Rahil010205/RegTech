@@ -21,6 +21,7 @@ class IngestionJob(Base):
     status: Mapped[str] = mapped_column(sa.String(20), server_default="pending")
     error_message: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
     error_code: Mapped[str | None] = mapped_column(sa.String(50), nullable=True)
+    retry_count: Mapped[int] = mapped_column(sa.Integer(), server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())
 

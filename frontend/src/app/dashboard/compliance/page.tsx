@@ -13,6 +13,7 @@ import {
   FileText,
   AlertTriangle,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { useOrganizations } from "@/hooks/use-organizations";
 import {
@@ -152,9 +153,19 @@ export default function CompliancePage() {
             },
           ]);
         } else {
-          setErrorMsg(
-            err instanceof Error ? err.message : "Failed to search regulatory clauses. Ensure the API is running.",
-          );
+          const errStr = err instanceof Error ? err.message : String(err);
+          const isTimeout =
+            errStr.toLowerCase().includes("timeout") ||
+            (typeof err === "object" && err !== null && "code" in err && (err as { code: unknown }).code === "ECONNABORTED");
+          if (isTimeout) {
+            setErrorMsg(
+              "Semantic search timed out while loading the embedding model on cold start. The model is warming up; please click Search Clauses again.",
+            );
+          } else {
+            setErrorMsg(
+              err instanceof Error ? err.message : "Failed to search regulatory clauses. Ensure the API is running.",
+            );
+          }
         }
       } finally {
         setIsSearchingClauses(false);
@@ -301,6 +312,19 @@ export default function CompliancePage() {
           </div>
         )}
       </motion.div>
+
+      {/* Loading state indicator with cold-start advice */}
+      {isSearchingClauses && (
+        <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-blue-300">
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-blue-400" />
+          <div className="text-sm">
+            <p className="font-semibold">Retrieving regulatory clauses with semantic AI...</p>
+            <p className="text-xs text-blue-300/80">
+              Loading the semantic embedding model (BAAI/bge-large-en-v1.5) on cold start may take up to 60 seconds. Subsequent searches will be instant.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Error state display */}
       {errorMsg && (

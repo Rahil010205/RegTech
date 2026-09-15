@@ -55,6 +55,7 @@ class RegulationVersion(Base):
     is_current: Mapped[bool] = mapped_column(sa.Boolean(), server_default=sa.false())
     content_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     status: Mapped[str] = mapped_column(sa.String(20), server_default="pending")
+    error_message: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
     storage_path: Mapped[str | None] = mapped_column(sa.String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())

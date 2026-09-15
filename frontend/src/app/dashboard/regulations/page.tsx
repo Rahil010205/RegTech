@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -120,36 +120,47 @@ export default function RegulationsPage() {
 
   const canEdit = user?.role === "ADMIN" || user?.role === "REGULATOR";
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  const fetchRegulations = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setErrorMsg(null);
 
-    listRegulations()
-      .then((data) => {
-        if (cancelled) return;
-        const regList = Array.isArray(data) ? data : (data?.items ?? []);
-        setRegulations(regList);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        if (isDemoMode) {
-          setRegulations(MOCK_REGULATIONS);
-        } else {
-          setRegulations([]);
-          setErrorMsg(
-            err instanceof Error ? err.message : "Failed to fetch regulations from API.",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const data = await listRegulations();
+      const regList = Array.isArray(data) ? data : (data?.items ?? []);
+      setRegulations(regList);
+    } catch (err: unknown) {
+      if (isDemoMode) {
+        setRegulations(MOCK_REGULATIONS);
+      } else {
+        setRegulations([]);
+        setErrorMsg(
+          err instanceof Error ? err.message : "Failed to fetch regulations from API.",
+        );
+      }
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, [isDemoMode]);
+
+  useEffect(() => {
+    fetchRegulations(true);
+  }, [fetchRegulations]);
+
+  // Auto-poll if any regulation is in PENDING or PROCESSING state
+  useEffect(() => {
+    const hasPendingOrProcessing = regulations.some((r) => {
+      const s = (r.status || "").toLowerCase();
+      return s === "pending" || s === "processing";
+    });
+
+    if (!hasPendingOrProcessing) return;
+
+    const interval = setInterval(() => {
+      fetchRegulations(false);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [regulations, fetchRegulations]);
 
   const filtered = regulations.filter(
     (r) =>
@@ -183,16 +194,27 @@ export default function RegulationsPage() {
             </p>
           </div>
         </div>
-        {canEdit && (
-          <Link
-            href="/dashboard/regulations/upload"
-            id="upload-regulation-link"
-            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:from-blue-500 hover:to-blue-400"
+        <div className="flex items-center gap-2">
+          <button
+            id="refresh-regulations-btn"
+            onClick={() => fetchRegulations(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-300 transition-all hover:bg-white/10 disabled:opacity-40"
           >
-            <Upload className="h-4 w-4" />
-            Upload Regulation
-          </Link>
-        )}
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-blue-400" : ""}`} />
+            Refresh
+          </button>
+          {canEdit && (
+            <Link
+              href="/dashboard/regulations/upload"
+              id="upload-regulation-link"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition-all hover:from-blue-500 hover:to-blue-400"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Regulation
+            </Link>
+          )}
+        </div>
       </div>
 
       {errorMsg && (

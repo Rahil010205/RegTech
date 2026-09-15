@@ -12,11 +12,29 @@ from app.api.schemas.regulation import (
   RegulationListResponse,
   RegulationResponse,
   RegulationUploadResponse,
+  RetryIngestionRequest,
+  RetryIngestionResponse,
+  VersionStatusResponse,
 )
 from app.core.constants import DocumentType, RegulatorCode
 from app.services.regulation_service import RegulationService
 
 router = APIRouter()
+
+
+@router.post(
+  "/admin/retry-ingestion",
+  response_model=RetryIngestionResponse,
+  summary="Re-enqueue pending or failed regulation ingestion tasks",
+)
+async def retry_ingestion(
+  service: Annotated[RegulationService, Depends(get_regulation_service)],
+  body: RetryIngestionRequest | None = None,
+) -> RetryIngestionResponse:
+  """Retry ingestion for selected versions or all pending/failed versions."""
+  version_ids = body.version_ids if body else None
+  res = service.retry_ingestion(version_ids=version_ids)
+  return RetryIngestionResponse(**res)
 
 
 @router.post(
@@ -58,6 +76,20 @@ async def list_regulations(
 
 
 @router.get(
+  "/versions/{version_id}/status",
+  response_model=VersionStatusResponse,
+  summary="Get ingestion status for a specific version",
+)
+async def get_version_status(
+  version_id: UUID,
+  service: Annotated[RegulationService, Depends(get_regulation_service)],
+) -> VersionStatusResponse:
+  """Return ingestion status, error message, and clause count for a specific regulation version."""
+  res = service.get_version_status(version_id)
+  return VersionStatusResponse(**res)
+
+
+@router.get(
   "/{regulation_id}",
   response_model=RegulationResponse,
   summary="Get regulation detail",
@@ -68,3 +100,16 @@ async def get_regulation(
 ) -> RegulationResponse:
   """Get regulation metadata and current version."""
   return service.get_regulation(regulation_id)
+
+
+@router.get(
+  "/{regulation_id}/status",
+  summary="Poll ingestion status for a regulation",
+)
+async def get_regulation_status(
+  regulation_id: UUID,
+  service: Annotated[RegulationService, Depends(get_regulation_service)],
+) -> dict:
+  """Return the current ingestion status and clause count for the active version."""
+  return service.get_regulation_status(regulation_id)
+

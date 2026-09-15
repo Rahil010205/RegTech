@@ -172,8 +172,9 @@ class OrganizationPolicyService:
                 id=row.id,
                 org_id=row.organization_id,
                 filename=row.source_filename or row.document_name,
-                doc_type=row.document_type,
+                doc_type=row.document_type or "OTHER",
                 status=row.status,
+                content_hash="",
                 created_at=row.created_at,
             )
             for row in rows

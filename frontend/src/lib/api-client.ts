@@ -1,6 +1,8 @@
 import axios from "axios";
 import { useAuthStore } from "@/store/auth-store";
 import type {
+  Regulation,
+  RegulatorCode,
   RegulationUploadPayload,
   RegulationUploadResponse,
   RegulationListResponse,
@@ -23,6 +25,13 @@ export const apiClient = axios.create({
   timeout: 60_000,
 });
 
+/** Dedicated client for semantic-search calls — model load can take ~60 s on cold start. */
+export const searchApiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 120_000,
+});
+
+
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
@@ -41,16 +50,65 @@ apiClient.interceptors.response.use(
   },
 );
 
+// Mirror interceptors on the search client
+searchApiClient.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+searchApiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(error);
+  },
+);
+
 // ─── Regulations ─────────────────────────────────────────────────────────────
 
 export async function listRegulations(
   skip = 0,
   limit = 50,
 ): Promise<RegulationListResponse> {
-  const res = await apiClient.get<RegulationListResponse>("/regulations", {
+  const res = await apiClient.get<Record<string, unknown>>("/regulations", {
     params: { skip, limit },
   });
-  return res.data;
+  const data = res.data;
+  const rawItems = Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data)
+    ? (data as unknown[])
+    : [];
+  const items: Regulation[] = rawItems.map((raw: unknown) => {
+    const item = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    const currentVersion = item.current_version && typeof item.current_version === "object"
+      ? (item.current_version as Record<string, unknown>)
+      : null;
+    const version = (currentVersion?.version || item.version || "1.0") as string;
+    const rawStatus = (currentVersion?.status || item.status || "PENDING") as string;
+    return {
+      id: String(item.id || ""),
+      title: String(item.title || ""),
+      regulator_code: (item.regulator_code as RegulatorCode) || "OTHER",
+      document_type: (item.document_type as Regulation["document_type"]) || "policy",
+      version,
+      status: rawStatus.toUpperCase() as Regulation["status"],
+      clause_count: typeof item.clause_count === "number" ? item.clause_count : 0,
+      uploaded_at: String(item.created_at || item.uploaded_at || ""),
+      uploaded_by: String(item.uploaded_by || "Compliance Officer"),
+    };
+  });
+  return {
+    items,
+    total: typeof data?.total === "number" ? data.total : items.length,
+    skip: typeof data?.skip === "number" ? data.skip : skip,
+    limit: typeof data?.limit === "number" ? data.limit : limit,
+  };
 }
 
 export async function uploadRegulation(
@@ -85,8 +143,8 @@ export async function uploadRegulation(
  * Calls GET /documents?org_id={orgId} (the documents router).
  */
 export async function listOrgDocuments(orgId: string): Promise<DocumentListResponse> {
-  const res = await apiClient.get<DocumentListResponse>("/documents", {
-    params: { org_id: orgId },
+  const res = await apiClient.get<DocumentListResponse>(`/organizations/${orgId}/documents`, {
+    params: { skip: 0, limit: 50 },
   });
   return res.data;
 }
@@ -102,9 +160,14 @@ export async function uploadOrgDocument(
   onUploadProgress?: (percent: number) => void,
 ): Promise<PolicyUploadResponse> {
   const form = new FormData();
-  // Rename file to use title as filename so the backend stores it sensibly
-  const renamedFile = new File([payload.file], payload.title || payload.file.name, {
-    type: payload.file.type,
+  // Ensure the filename preserves or appends the .pdf extension
+  const rawTitle = (payload.title || payload.file.name).trim();
+  const filename = rawTitle.toLowerCase().endsWith(".pdf")
+    ? rawTitle
+    : `${rawTitle}.pdf`;
+  const fileType = payload.file.type || "application/pdf";
+  const renamedFile = new File([payload.file], filename, {
+    type: fileType,
   });
   form.append("file", renamedFile);
   form.append("document_type", payload.document_type);
@@ -113,6 +176,9 @@ export async function uploadOrgDocument(
     `/organizations/${orgId}/documents`,
     form,
     {
+      // Embedding model cold-start (BAAI/bge-large-en-v1.5) can take 2–3 min on first upload.
+      // Override the default 60 s apiClient timeout to avoid false failures.
+      timeout: 180_000,
       onUploadProgress: (event) => {
         if (event.total && onUploadProgress) {
           onUploadProgress(Math.round((event.loaded * 100) / event.total));
@@ -134,12 +200,14 @@ export async function searchRegulatoryClauses(
   query: string,
   top_k = 10,
 ): Promise<SearchRetrievalResponse> {
-  const res = await apiClient.post<SearchRetrievalResponse>("/search", {
+  // Uses searchApiClient (120 s timeout) — model load on cold start can take ~60 s.
+  const res = await searchApiClient.post<SearchRetrievalResponse>("/search", {
     query,
     top_k,
   });
   return res.data;
 }
+
 
 /**
  * Evaluate compliance risk for an organization against a regulatory clause.
@@ -222,3 +290,22 @@ export async function fetchHealth(): Promise<BackendHealthResponse> {
   const res = await apiClient.get<BackendHealthResponse>("/health/ready");
   return res.data;
 }
+
+// ─── Regulation Status Polling ────────────────────────────────────────────────
+
+export interface RegulationStatusResponse {
+  regulation_id: string;
+  version_id: string | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  clause_count: number;
+}
+
+export async function getRegulationStatus(
+  regulationId: string,
+): Promise<RegulationStatusResponse> {
+  const res = await apiClient.get<RegulationStatusResponse>(
+    `/regulations/${regulationId}/status`,
+  );
+  return res.data;
+}
+

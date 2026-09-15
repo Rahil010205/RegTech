@@ -77,10 +77,10 @@ export function UploadDropzone({
               <CheckCircle2 className="h-14 w-14 text-emerald-400" />
             </motion.div>
             <p className="text-lg font-semibold text-emerald-300">
-              Upload Successful
+              Upload & Processing Complete
             </p>
             <p className="text-sm text-emerald-400/70">
-              Document is being processed in the background.
+              Policy has been indexed and is ready for compliance analysis.
             </p>
           </motion.div>
         ) : uploadState === "uploading" ? (
@@ -99,7 +99,7 @@ export function UploadDropzone({
             </motion.div>
             <div className="w-full max-w-xs space-y-1.5">
               <div className="flex justify-between text-xs text-blue-300/70">
-                <span>Uploading…</span>
+                <span>Uploading and processing…</span>
                 <span>{progress}%</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-blue-900/50">
@@ -113,6 +113,9 @@ export function UploadDropzone({
             </div>
             <p className="text-sm text-blue-300/70">
               {selectedFile?.name ?? "Sending file…"}
+            </p>
+            <p className="text-[11px] text-blue-400/50 text-center max-w-xs">
+              First upload may take up to a few minutes while the embedding model loads.
             </p>
           </motion.div>
         ) : uploadState === "error" ? (

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileStack, Building2 } from "lucide-react";
 import Link from "next/link";
+import axios from "axios";
 import { uploadOrgDocument } from "@/lib/api-client";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { UploadDropzone } from "@/components/ui/upload-dropzone";
@@ -90,9 +91,42 @@ export default function UploadPolicyPage() {
           }, 200);
         } else {
           setUploadState("error");
-          setErrorMessage(
-            err instanceof Error ? err.message : "Upload failed. Please check network/parameters and retry.",
-          );
+          let message = "Upload failed. Please check network/parameters and retry.";
+          if (axios.isAxiosError(err) && err.code === "ECONNABORTED") {
+            message =
+              "Request timed out. The embedding model may still be loading on the server. " +
+              "Please wait a moment and try again.";
+          } else if (axios.isAxiosError(err)) {
+            const data = err.response?.data;
+            if (typeof data === "string" && data.trim()) {
+              message = data;
+            } else if (data && typeof data === "object") {
+              if (typeof data.error === "string" && data.error.trim()) {
+                message = data.error;
+              } else if (typeof data.detail === "string" && data.detail.trim()) {
+                message = data.detail;
+              } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+                message = data.detail
+                  .map((d: unknown) =>
+                    typeof d === "string"
+                      ? d
+                      : d && typeof d === "object" && "msg" in d && typeof (d as { msg: unknown }).msg === "string"
+                      ? (d as { msg: string }).msg
+                      : JSON.stringify(d),
+                  )
+                  .join("; ");
+              } else if (typeof data.message === "string" && data.message.trim()) {
+                message = data.message;
+              } else if (err.message) {
+                message = err.message;
+              }
+            } else if (err.message) {
+              message = err.message;
+            }
+          } else if (err instanceof Error) {
+            message = err.message;
+          }
+          setErrorMessage(message);
         }
       }
     },
@@ -224,7 +258,7 @@ export default function UploadPolicyPage() {
               disabled={!canSubmit}
               className="w-full rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-200 hover:from-emerald-500 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {uploadState === "uploading" ? "Uploading…" : "Upload Policy"}
+              {uploadState === "uploading" ? "Processing…" : "Upload Policy"}
             </button>
           )}
         </form>

@@ -33,8 +33,10 @@ from app.api.schemas.organization_document import (
     OrganizationResponse,
 )
 from fastapi import Query
+from app.api.dependencies.pagination import get_pagination
 from app.api.schemas.organization import PaginatedOrganizationResponse
 from app.api.schemas.common import PaginationParams
+from app.api.schemas.document import DocumentListResponse
 from app.api.schemas.risk_scoring import (
     RiskScoringRequest,
     RiskScoringResponse,
@@ -108,7 +110,18 @@ async def upload_organization_document(
         status_code=status.HTTP_201_CREATED,
         content=result.model_dump(mode="json"),
     )
-
+@router.get(
+    "/{organization_id}/documents",
+    response_model=DocumentListResponse,
+    summary="List organization policy documents",
+) 
+def list_organization_documents(
+    organization_id: UUID,
+    pagination: Annotated[PaginationParams, Depends(get_pagination)],
+    service: Annotated[OrganizationPolicyService, Depends(get_organization_policy_service)],
+) -> DocumentListResponse:
+    """List organization policy documents with pagination."""
+    return service.list_documents(organization_id=organization_id, skip=pagination.skip, limit=pagination.limit)
 
 @router.post(
     "/{organization_id}/documents/search",

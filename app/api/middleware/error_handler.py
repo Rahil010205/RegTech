@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.exceptions import (
   ApplicationError,
+  ConflictError,
   DomainError,
   InfrastructureError,
   NotFoundError,
@@ -18,6 +19,10 @@ def register_exception_handlers(app: FastAPI) -> None:
   @app.exception_handler(NotFoundError)
   async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
     return _error_response(request, exc, 404)
+
+  @app.exception_handler(ConflictError)
+  async def conflict_handler(request: Request, exc: ConflictError) -> JSONResponse:
+    return _error_response(request, exc, 409)
 
   @app.exception_handler(ValidationError)
   async def validation_handler(request: Request, exc: ValidationError) -> JSONResponse:
