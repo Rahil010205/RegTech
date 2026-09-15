@@ -24,6 +24,8 @@ class RegulationVersionResponse(BaseModel):
   effective_date: date | None
   is_current: bool
   status: str
+  clause_count: int = 0
+  error_message: str | None = None
   created_at: datetime
 
 
@@ -36,6 +38,7 @@ class RegulationResponse(BaseModel):
   document_type: str
   created_at: datetime
   current_version: RegulationVersionResponse | None = None
+  clause_count: int = 0
 
 
 class RegulationListResponse(BaseModel):
@@ -50,4 +53,24 @@ class RegulationUploadResponse(BaseModel):
   version_id: UUID
   job_id: UUID
   status: str
+  message: str
+
+
+class VersionStatusResponse(BaseModel):
+  """Detailed status for a specific regulation version."""
+  version_id: UUID
+  regulation_id: UUID
+  status: str
+  clause_count: int = 0
+  error_message: str | None = None
+
+
+class RetryIngestionRequest(BaseModel):
+  """Request body for the admin retry endpoint."""
+  version_ids: list[UUID] | None = None
+
+
+class RetryIngestionResponse(BaseModel):
+  requeued: list[str]
+  skipped: list[str]
   message: str

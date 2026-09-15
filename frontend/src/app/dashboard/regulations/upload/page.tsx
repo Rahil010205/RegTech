@@ -7,7 +7,7 @@ import { ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { uploadRegulation } from "@/lib/api-client";
 import { UploadDropzone } from "@/components/ui/upload-dropzone";
-import type { RegulatorCode } from "@/types/api";
+import type { RegulatorCode, RegulationDocumentType } from "@/types/api";
 import { RoleGuard } from "@/components/shared/RoleGuard";
 
 const REGULATOR_CODES: RegulatorCode[] = [
@@ -19,14 +19,24 @@ const REGULATOR_CODES: RegulatorCode[] = [
   "OTHER",
 ];
 
+const DOCUMENT_TYPES: { value: RegulationDocumentType; label: string }[] = [
+  { value: "policy", label: "Policy" },
+  { value: "circular", label: "Circular" },
+  { value: "guideline", label: "Guideline" },
+  { value: "act", label: "Act / Law" },
+  { value: "sop", label: "SOP" },
+  { value: "procedure", label: "Procedure" },
+];
+
 type UploadState = "idle" | "uploading" | "success" | "error";
-
-
 
 export default function UploadRegulationPage() {
   const router = useRouter();
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   const [file, setFile] = useState<File | null>(null);
   const [regulatorCode, setRegulatorCode] = useState<RegulatorCode>("RBI");
+  const [docType, setDocType] = useState<RegulationDocumentType>("policy");
   const [title, setTitle] = useState("");
   const [version, setVersion] = useState("");
   const [uploadState, setUploadState] = useState<UploadState>("idle");
@@ -44,20 +54,25 @@ export default function UploadRegulationPage() {
 
       try {
         await uploadRegulation(
-          { file, regulator_code: regulatorCode, title, version },
+          {
+            file,
+            regulator_code: regulatorCode,
+            title,
+            document_type: docType,
+            version,
+          },
           (pct) => setProgress(pct),
         );
         setUploadState("success");
-        setTimeout(() => router.push("/dashboard/regulations"), 3000);
+        setTimeout(() => router.push("/dashboard/regulations"), 2500);
       } catch (err: unknown) {
-        // Graceful fallback: simulate success for demo if API unreachable
         if (
+          isDemoMode &&
           err instanceof Error &&
           (err.message.includes("Network Error") ||
             err.message.includes("ECONNREFUSED") ||
             err.message.includes("ERR_CONNECTION_REFUSED"))
         ) {
-          // Simulate progress then success for demo
           let p = 0;
           const interval = setInterval(() => {
             p += Math.random() * 15 + 5;
@@ -67,7 +82,7 @@ export default function UploadRegulationPage() {
               setProgress(100);
               setTimeout(() => {
                 setUploadState("success");
-                setTimeout(() => router.push("/dashboard/regulations"), 3000);
+                setTimeout(() => router.push("/dashboard/regulations"), 2500);
               }, 400);
             } else {
               setProgress(Math.round(p));
@@ -76,12 +91,12 @@ export default function UploadRegulationPage() {
         } else {
           setUploadState("error");
           setErrorMessage(
-            err instanceof Error ? err.message : "Upload failed. Please retry.",
+            err instanceof Error ? err.message : "Upload failed. Please check backend API.",
           );
         }
       }
     },
-    [file, regulatorCode, title, version, router],
+    [file, regulatorCode, docType, title, version, isDemoMode, router],
   );
 
   const handleClear = useCallback(() => {
@@ -171,6 +186,33 @@ export default function UploadRegulationPage() {
                   }`}
                 >
                   {code}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Document Type */}
+          <div className="space-y-1.5">
+            <label
+              htmlFor="document-type"
+              className="text-xs font-semibold uppercase tracking-wider text-zinc-500"
+            >
+              Document Classification Type
+            </label>
+            <div className="flex flex-wrap gap-2" id="document-type">
+              {DOCUMENT_TYPES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  id={`doc-type-${value}`}
+                  onClick={() => setDocType(value)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                    docType === value
+                      ? "border-blue-500/50 bg-blue-500/20 text-blue-300 shadow-sm"
+                      : "border-white/10 bg-white/[0.02] text-zinc-500 hover:border-white/20 hover:text-zinc-300"
+                  }`}
+                >
+                  {label}
                 </button>
               ))}
             </div>

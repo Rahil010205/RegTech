@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import type { User, UserRole } from "@/types/auth";
 import { MobileSidebar } from "@/components/shared/Sidebar";
-import { useOrganizations } from "@/hooks/use-organizations";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,13 +17,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+import { OrganizationSelector } from "@/components/shared/OrganizationSelector";
+import { DemoBadge } from "@/components/shared/DemoBadge";
 
 const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: "Admin",
@@ -51,9 +46,6 @@ export function TopNav({
   onLogout: () => void;
 }) {
   const router = useRouter();
-  const { organizations, activeOrgId, setActiveOrg } = useOrganizations();
-  const showOrgSelector =
-    user.role === "ADMIN" || user.role === "REGULATOR";
 
   return (
     <header className="glass sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-white/10 px-4 lg:px-6">
@@ -68,20 +60,8 @@ export function TopNav({
       </div>
 
       <div className="flex items-center gap-3">
-        {showOrgSelector && activeOrgId && (
-          <Select value={activeOrgId} onValueChange={setActiveOrg}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Active organization" />
-            </SelectTrigger>
-            <SelectContent>
-              {organizations.map((org) => (
-                <SelectItem key={org.id} value={org.id}>
-                  {org.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <DemoBadge />
+        <OrganizationSelector />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -19,6 +19,11 @@ class Regulator(Base):
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     jurisdiction: Mapped[str] = mapped_column(sa.String(50), nullable=False)
 
+    # Back‑populates relationship to regulations
+    regulations: Mapped[list["Regulation"]] = relationship(
+        "Regulation", back_populates="regulator", cascade="all, delete-orphan"
+    )
+
 
 class Regulation(Base):
     """Global regulatory document issued by an authority."""
@@ -31,6 +36,9 @@ class Regulation(Base):
     document_type: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="CIRCULAR")
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())
+
+    # Relationship to regulator
+    regulator: Mapped[Regulator] = relationship("Regulator", back_populates="regulations")
 
     versions: Mapped[list["RegulationVersion"]] = relationship(back_populates="regulation", cascade="all, delete-orphan")
 
@@ -47,6 +55,7 @@ class RegulationVersion(Base):
     is_current: Mapped[bool] = mapped_column(sa.Boolean(), server_default=sa.false())
     content_hash: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     status: Mapped[str] = mapped_column(sa.String(20), server_default="pending")
+    error_message: Mapped[str | None] = mapped_column(sa.Text(), nullable=True)
     storage_path: Mapped[str | None] = mapped_column(sa.String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now())

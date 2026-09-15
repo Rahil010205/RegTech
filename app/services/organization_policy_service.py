@@ -14,6 +14,10 @@ from app.api.schemas.organization_document import (
     OrganizationPolicySearchResponse,
     OrganizationResponse,
 )
+import sqlalchemy as sa
+from app.models.organization_document import OrganizationDocument
+from app.api.schemas.document import DocumentResponse, DocumentListResponse
+from app.api.schemas.organization import PaginatedOrganizationResponse
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError, ValidationError
 from app.ingestion.embedding_service import EmbeddingService
@@ -132,3 +136,47 @@ class OrganizationPolicyService:
         if organization is None:
             raise NotFoundError("Organization", str(organization_id))
         return organization
+# duplicate _require_organization method removed
+
+    def list_organizations(self, skip: int = 0, limit: int = 20) -> PaginatedOrganizationResponse:
+        """Return paginated list of organizations."""
+        total = self.db.scalar(select(sa.func.count()).select_from(Organization))
+        rows = self.db.scalars(
+            select(Organization)
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        items = [
+            OrganizationResponse(id=row.id, name=row.name, slug=row.slug)
+            for row in rows
+        ]
+        return PaginatedOrganizationResponse(
+            items=items, total=total, skip=skip, limit=limit
+        )
+
+    def list_documents(self, organization_id: UUID, skip: int = 0, limit: int = 20) -> DocumentListResponse:
+        """Return paginated list of policy documents for an organization."""
+        # Ensure org exists
+        self._require_organization(organization_id)
+        total = self.db.scalar(
+            select(sa.func.count()).select_from(OrganizationDocument).where(OrganizationDocument.organization_id == organization_id)
+        )
+        rows = self.db.scalars(
+            select(OrganizationDocument)
+            .where(OrganizationDocument.organization_id == organization_id)
+            .offset(skip)
+            .limit(limit)
+        ).all()
+        items = [
+            DocumentResponse(
+                id=row.id,
+                org_id=row.organization_id,
+                filename=row.source_filename or row.document_name,
+                doc_type=row.document_type or "OTHER",
+                status=row.status,
+                content_hash="",
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        return DocumentListResponse(items=items, total=total, skip=skip, limit=limit)

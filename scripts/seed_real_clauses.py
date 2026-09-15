@@ -72,9 +72,15 @@ CLAUSES = [
 ]
 
 
+from uuid import UUID
+from app.core.constants import JobStatus
+from app.models.regulation import Regulator, Regulation, RegulationVersion
+
+VERSION_ID = UUID("26787ca6-37ee-4ab7-b2c9-5eeb3400d193")
+REGULATION_ID = UUID("11111111-2222-3333-4444-555555555555")
+
 def main():
     settings = get_settings()
-
     engine = create_engine(settings.database_url)
 
     print("Loading BGE-large-en-v1.5...")
@@ -88,6 +94,41 @@ def main():
     print(f"Embedding dimension: {len(embeddings[0])}")
 
     with Session(engine) as session:
+        regulator = session.get(Regulator, "RBI")
+        if not regulator:
+            regulator = Regulator(code="RBI", name="Reserve Bank of India", jurisdiction="IN")
+            session.add(regulator)
+            session.flush()
+
+        regulation = session.get(Regulation, REGULATION_ID)
+        if not regulation:
+            regulation = Regulation(
+                id=REGULATION_ID,
+                regulator_code="RBI",
+                title="RBI Master Direction - IT Framework and Data Security",
+                document_type="CIRCULAR",
+            )
+            session.add(regulation)
+            session.flush()
+
+        version = session.get(RegulationVersion, VERSION_ID)
+        if not version:
+            version = RegulationVersion(
+                id=VERSION_ID,
+                regulation_id=regulation.id,
+                version="2026.1",
+                content_hash="seed-hash-rbi-dr-2026",
+                status=JobStatus.COMPLETED.value,
+                is_current=True,
+            )
+            session.add(version)
+            session.flush()
+
+        # Remove existing seed clauses for this version
+        for existing in session.query(Clause).filter_by(version_id=VERSION_ID).all():
+            session.delete(existing)
+        session.flush()
+
         for clause_data, embedding in zip(CLAUSES, embeddings):
             clause = Clause(
                 version_id=VERSION_ID,
@@ -95,10 +136,14 @@ def main():
                 section=clause_data["section"],
                 title=clause_data["title"],
                 text=clause_data["text"],
-                metadata_={"source": "direct_test_seed", "embedding": "bge-large-en-v1.5"},
+                metadata_={
+                    "document_name": "RBI_IT_Framework_2026.pdf",
+                    "regulator": "RBI",
+                    "jurisdiction": "IN",
+                    "embedding": "bge-large-en-v1.5",
+                },
                 embedding=embedding,
             )
-
             session.add(clause)
 
         session.commit()

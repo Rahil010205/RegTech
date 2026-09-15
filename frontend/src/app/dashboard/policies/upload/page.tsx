@@ -3,9 +3,11 @@
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileStack } from "lucide-react";
+import { ArrowLeft, FileStack, Building2 } from "lucide-react";
 import Link from "next/link";
-import { uploadOrgDocument, MOCK_ORG_ID } from "@/lib/api-client";
+import axios from "axios";
+import { uploadOrgDocument } from "@/lib/api-client";
+import { useOrganizations } from "@/hooks/use-organizations";
 import { UploadDropzone } from "@/components/ui/upload-dropzone";
 import type { DocumentType } from "@/types/api";
 import { RoleGuard } from "@/components/shared/RoleGuard";
@@ -31,6 +33,9 @@ type UploadState = "idle" | "uploading" | "success" | "error";
 
 export default function UploadPolicyPage() {
   const router = useRouter();
+  const { activeOrgId, activeOrganization } = useOrganizations();
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
   const [file, setFile] = useState<File | null>(null);
   const [docType, setDocType] = useState<DocumentType>("KYC_SOP");
   const [title, setTitle] = useState("");
@@ -43,20 +48,27 @@ export default function UploadPolicyPage() {
       e.preventDefault();
       if (!file || !title.trim()) return;
 
+      if (!activeOrgId) {
+        setUploadState("error");
+        setErrorMessage("An active organization must be selected before uploading policy documents.");
+        return;
+      }
+
       setUploadState("uploading");
       setProgress(0);
       setErrorMessage("");
 
       try {
         await uploadOrgDocument(
-          MOCK_ORG_ID,
+          activeOrgId,
           { file, title, document_type: docType },
           (pct) => setProgress(pct),
         );
         setUploadState("success");
-        setTimeout(() => router.push("/dashboard/policies"), 3000);
+        setTimeout(() => router.push("/dashboard/policies"), 2500);
       } catch (err: unknown) {
         if (
+          isDemoMode &&
           err instanceof Error &&
           (err.message.includes("Network Error") ||
             err.message.includes("ECONNREFUSED") ||
@@ -71,7 +83,7 @@ export default function UploadPolicyPage() {
               setProgress(100);
               setTimeout(() => {
                 setUploadState("success");
-                setTimeout(() => router.push("/dashboard/policies"), 3000);
+                setTimeout(() => router.push("/dashboard/policies"), 2500);
               }, 400);
             } else {
               setProgress(Math.round(p));
@@ -79,13 +91,46 @@ export default function UploadPolicyPage() {
           }, 200);
         } else {
           setUploadState("error");
-          setErrorMessage(
-            err instanceof Error ? err.message : "Upload failed. Please retry.",
-          );
+          let message = "Upload failed. Please check network/parameters and retry.";
+          if (axios.isAxiosError(err) && err.code === "ECONNABORTED") {
+            message =
+              "Request timed out. The embedding model may still be loading on the server. " +
+              "Please wait a moment and try again.";
+          } else if (axios.isAxiosError(err)) {
+            const data = err.response?.data;
+            if (typeof data === "string" && data.trim()) {
+              message = data;
+            } else if (data && typeof data === "object") {
+              if (typeof data.error === "string" && data.error.trim()) {
+                message = data.error;
+              } else if (typeof data.detail === "string" && data.detail.trim()) {
+                message = data.detail;
+              } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+                message = data.detail
+                  .map((d: unknown) =>
+                    typeof d === "string"
+                      ? d
+                      : d && typeof d === "object" && "msg" in d && typeof (d as { msg: unknown }).msg === "string"
+                      ? (d as { msg: string }).msg
+                      : JSON.stringify(d),
+                  )
+                  .join("; ");
+              } else if (typeof data.message === "string" && data.message.trim()) {
+                message = data.message;
+              } else if (err.message) {
+                message = err.message;
+              }
+            } else if (err.message) {
+              message = err.message;
+            }
+          } else if (err instanceof Error) {
+            message = err.message;
+          }
+          setErrorMessage(message);
         }
       }
     },
-    [file, docType, title, router],
+    [file, docType, title, activeOrgId, isDemoMode, router],
   );
 
   const handleClear = useCallback(() => {
@@ -96,7 +141,10 @@ export default function UploadPolicyPage() {
   }, []);
 
   const canSubmit =
-    file !== null && title.trim().length > 0 && uploadState === "idle";
+    file !== null &&
+    title.trim().length > 0 &&
+    Boolean(activeOrgId) &&
+    uploadState === "idle";
 
   return (
     <RoleGuard allow={["ADMIN", "ORGANIZATION"]}>
@@ -127,6 +175,13 @@ export default function UploadPolicyPage() {
             </p>
           </div>
         </div>
+
+        {!activeOrgId && (
+          <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-300 text-sm">
+            <Building2 className="h-5 w-5 shrink-0" />
+            <span>Select or create an active organization in the top navigation bar to enable policy uploads.</span>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -189,8 +244,10 @@ export default function UploadPolicyPage() {
 
           <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
             <p className="text-[10px] text-zinc-600">
-              Organization ID:{" "}
-              <span className="font-mono text-zinc-500">{MOCK_ORG_ID}</span>
+              Target Organization:{" "}
+              <span className="font-mono text-zinc-400">
+                {activeOrganization?.name ? `${activeOrganization.name} (${activeOrgId})` : activeOrgId || "None"}
+              </span>
             </p>
           </div>
 
@@ -201,7 +258,7 @@ export default function UploadPolicyPage() {
               disabled={!canSubmit}
               className="w-full rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all duration-200 hover:from-emerald-500 hover:to-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {uploadState === "uploading" ? "Uploading…" : "Upload Policy"}
+              {uploadState === "uploading" ? "Processing…" : "Upload Policy"}
             </button>
           )}
         </form>
